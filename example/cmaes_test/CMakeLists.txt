@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.15)
+project(cmaes_test LANGUAGES CXX C)
+add_library(cmaes STATIC cmaes.c)
+add_executable(cmaes_test main.cpp cmaes.c)
+include("../function.cmake")
+common(cmaes_test)
+common(cmaes)

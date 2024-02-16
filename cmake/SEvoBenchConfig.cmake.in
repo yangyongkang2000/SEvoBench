@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+set_and_check(SEvoBench_LIB_DIR "@PACKAGE_LIB_INSTALL_DIR@") 
+include("${SEvoBench_LIB_DIR}/cmake/SEvoBenchTargets.cmake")
+check_required_components(SEvoBench)
+   

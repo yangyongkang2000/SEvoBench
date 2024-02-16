@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.15)
+project(add_problem)
+include("../function.cmake")
+add_executable(add_problem main.cpp)
+common(add_problem)
