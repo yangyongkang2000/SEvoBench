@@ -62,7 +62,7 @@ inline auto de_optimize(G &&positions, F &&function, T l, T r,
     for (int i = 0; i < Pop_Size; i++)
       if (tmp_fit[i] < fit[i]) {
         fit[i] = tmp_fit[i];
-        positions[i] = tmp[i];
+        std::copy_n(tmp[i].data(),Dim,positions[i].data());
       }
     if constexpr (Memory_Flag) {
       de_convergence_curve[2 * _] = (_ + 2) * Pop_Size;

@@ -69,7 +69,7 @@ inline auto pso_optimize(G &&positions, F &&f, T left_bound, T right_bound,
             w * velocities[i][j] +
                 c1 * r1[j] * (particles_best_pos[i][j] - positions[i][j]) +
                 c2 * r2[j] *
-                    (positions[global_best_index][j] - positions[i][j]),
+                    (particles_best_pos[global_best_index][j] - positions[i][j]),
             -v_max, v_max);
     }
     for (int i = 0; i < Pop_Size; i++) {

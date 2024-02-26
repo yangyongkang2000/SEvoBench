@@ -71,7 +71,8 @@ inline auto jade_optimize(
       do {
         r2 = sr4() % (Pop_Size + Archive_Size);
       } while (r2 == i || r2 == r1);
-      auto &vr2 = r2 >= Pop_Size ? Archive[r2 - Pop_Size] : positions[r2];
+      auto vr2 =
+          r2 >= Pop_Size ? Archive[r2 - Pop_Size].data() : positions[r2].data();
       auto j_rand = sr4() % Dim;
       std::generate_n(random_c.begin(), Dim, [&] { return sr5() * k; });
 
@@ -96,8 +97,8 @@ inline auto jade_optimize(
     for (int i = 0; i < Pop_Size; i++)
       if (tmp_fit[i] < fit[i]) {
         fit[i] = tmp_fit[i];
-        positions[i] = tmp[i];
-        Archive[replace_index++] = positions[i];
+        std::copy_n(tmp[i].data(), Dim, positions[i].data());
+        std::copy_n(positions[i].data(), Dim, Archive[replace_index++].data());
         replace_index %= Pop_Size;
         Archive_Size = Archive_Size == Pop_Size ? Pop_Size : Archive_Size + 1;
       }

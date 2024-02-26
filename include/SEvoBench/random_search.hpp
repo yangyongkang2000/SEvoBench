@@ -7,11 +7,10 @@ template <std::floating_point T> struct random_search_parameter {};
 
 template <int Dim, int Pop_Size = 1, int Max = 1000 * Dim,
           bool Memory_Flag = false, typename G, typename F,
-          std::floating_point T, typename Parameter_Type>
+          std::floating_point T>
   requires algorithm_func_concept<Dim, Pop_Size, Max, F, T> &&
            algorithm_vector_concept<F, G, T>
-inline auto random_search_optimize(G &&sol, F &&function, T l, T r,
-                                   const Parameter_Type &) noexcept {
+inline auto random_search_optimize(G &&sol, F &&function, T l, T r) noexcept {
   std::random_device rd;
   tool::simple_rand sr(rd());
   tool::curve_t<Memory_Flag, T, Max> random_search_convergence_curve;
@@ -53,10 +52,10 @@ inline auto random_search_optimize(G &&sol, F &&function, T l, T r,
 
 template <int Dim, int Pop_Size = 1, int Max = 1000 * Dim,
           bool Memory_Flag = false, typename F, std::floating_point T,
-          typename Parameter_Type>
+          typename Parameter_Type=random_search_parameter<T>>
   requires algorithm_func_concept<Dim, Pop_Size, Max, F, T>
 inline auto random_search(F &&function, T l, T r,
-                          const Parameter_Type &pt) noexcept {
+                          const Parameter_Type & _=Parameter_Type() ) noexcept {
   std::random_device rd;
   std::default_random_engine gen(rd());
   std::uniform_real_distribution<T> dis(l, r);
@@ -64,6 +63,6 @@ inline auto random_search(F &&function, T l, T r,
   for (auto &x : sol)
     x = dis(gen);
   return random_search_optimize<Dim, Pop_Size, Max, Memory_Flag>(sol, function,
-                                                                 l, r, pt);
+                                                                 l, r);
 }
 } // namespace sevobench

@@ -121,8 +121,8 @@ inline auto template_shade_optimize(
       } while (r2 == i || r2 == r1);
       auto j_rand = sr4() % Dim;
       std::generate_n(random_c.begin(), Dim, [&] { return sr5() * k; });
-      auto &vr2 =
-          r2 >= M_Gen ? Archive[r2 - M_Gen] : positions[b ? r2 : index[r2]];
+      auto vr2 =
+          r2 >= M_Gen ? Archive[r2 - M_Gen].data() : positions[b ? r2 : index[r2]].data();
       r1 = b ? r1 : index[r1];
       auto i1 = b ? i : index[i];
       for (int j = 0; j < Dim; j++) {
@@ -142,7 +142,7 @@ inline auto template_shade_optimize(
         *f_first++ = cF;
         *cr_first++ = cR;
         *df_first++ = fit[i1] - tmp_fit[i];
-        Archive[replace_index++] = positions[i1];
+        std::copy_n(positions[i1].data(),Dim,Archive[replace_index++].data());
         replace_index %= A_Size;
         Archive_Size = Archive_Size == A_Size ? A_Size : Archive_Size + 1;
       }
@@ -150,7 +150,7 @@ inline auto template_shade_optimize(
     for (int i = 0; i < M_Gen; i++)
       if (tmp_fit[i] < fit[b ? i : index[i]]) {
         fit[b ? i : index[i]] = tmp_fit[i];
-        positions[b ? i : index[i]] = tmp[i];
+        std::copy_n(tmp[i].data(),Dim,positions[b?i:index[i]].data());
       }
     if (f_first != f_archive.begin()) {
       auto scr2 = std::inner_product(cr_archive.begin(), cr_first,
@@ -183,7 +183,7 @@ inline auto template_shade_optimize(
         A_Size = static_cast<int>(pt.r_Arc * tmp_M_Gen);
         std::reverse(Archive.begin(), Archive.begin() + Archive_Size);
         Archive_Size = std::min(A_Size, Archive_Size);
-        replace_index %= Archive_Size;
+        replace_index =std::min(replace_index,A_Size-1);
         M_Gen = tmp_M_Gen;
       }
     }

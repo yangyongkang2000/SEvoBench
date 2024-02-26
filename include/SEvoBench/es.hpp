@@ -25,7 +25,7 @@ inline auto es_optimize(G &&sol, F &&function, T l, T r,
   T sigma = pt.sigma;
   std::random_device rd;
   tool::simple_rand sr1(rd()), sr2(rd());
-  std::remove_reference_t<G> tmp;
+  std::array<T,Dim> tmp;
   tool::curve_t<Memory_Flag, T, Max> es_convergence_curve;
   auto fit = function(sol.data());
   constexpr T k = T(1) / T(0x7fff);
@@ -36,7 +36,7 @@ inline auto es_optimize(G &&sol, F &&function, T l, T r,
             sol[j] + tool::box_muller(T(0), sigma, sr1() * k, sr2() * k), l, r);
       auto y = function(tmp.data());
       if (y < fit) {
-        sol = tmp;
+        std::copy_n(tmp.data(),Dim,sol.data());
         fit = y;
         sigma *= alpha;
       } else
@@ -51,7 +51,7 @@ inline auto es_optimize(G &&sol, F &&function, T l, T r,
               r);
         auto y = function(tmp.data());
         if (y < fit) {
-          sol = tmp;
+          std::copy_n(tmp.data(),Dim,sol.data());
           fit = y;
           sigma *= alpha;
         } else

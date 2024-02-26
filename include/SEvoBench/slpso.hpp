@@ -20,7 +20,7 @@ template <int Dim, int Pop_Size, int Max, bool Memory_Flag = false, typename G,
            slpso_parameter_concept<Parameter_Type, T> &&
            algorithm_positions_concept<F, G, T>
 inline auto
-slpso_optimize(G &positions, F &&function, T l, T r,
+slpso_optimize(G &&positions, F &&function, T l, T r,
                const Parameter_Type &pt = Parameter_Type()) noexcept {
   constexpr T q = T(1) / T(Pop_Size);
   const T alpha = pt.alpha;
@@ -50,8 +50,6 @@ slpso_optimize(G &positions, F &&function, T l, T r,
   std::transform(positions.begin(), positions.begin() + Pop_Size, fit.begin(),
                  [&](auto &x) { return function(x.data()); });
   T min_value = *std::min_element(fit.begin(), fit.end());
-  std::array<T, Dim> best_position =
-      positions[std::min_element(fit.begin(), fit.end()) - fit.begin()];
   int fes(Pop_Size);
   for (int _ = 0; (Memory_Flag ? _ : fes) < Max; _++) {
     std::array<T, Dim> mean{};
@@ -61,7 +59,6 @@ slpso_optimize(G &positions, F &&function, T l, T r,
     std::stable_sort(index.begin(), index.end(),
                      [&](auto x, auto y) { return fit[x] > fit[y]; });
     if (fit[index.back()] < min_value) {
-      best_position = positions[index.back()];
       min_value = fit[index.back()];
     }
     if constexpr (Dim > Pop_Size)
@@ -119,11 +116,12 @@ slpso_optimize(G &positions, F &&function, T l, T r,
           std::min(min_value, *std::min_element(fit.begin(), fit.end()));
     }
   }
+  auto i=std::min_element(fit.begin(),fit.end())-fit.begin();
   if constexpr (Memory_Flag)
-    return std::make_tuple(best_position, min_value,
+    return std::make_tuple(positions[i], fit[i],
                            std::move(slpso_convergence_curve));
   if constexpr (!Memory_Flag)
-    return std::make_pair(best_position, min_value);
+    return std::make_pair(positions[i], fit[i]);
 }
 
 template <int Dim, int Pop_Size, int Max, bool Memory_Flag = false, typename F,

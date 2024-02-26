@@ -128,7 +128,7 @@ target_link_libraries(${EXE} PRIVATE
 &emsp;The typical declaration of an optimization algorithm in SEvoBench is as follows:
 ```C++
 template<int Dim,int Pop_Size,int Max,bool Memory_Flag=false,typename F,std::floating_point T,typename Parameter_Type=algorithm_parameter<T>>
-inline auto algorithm_func(F function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto algorithm_func(F&& function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 ```
 
@@ -152,7 +152,7 @@ Now let me explain the meanings of the template parameters for the function:
 
 Now, let me explain the function arguments:
 
-+ *F function*: For the function argument *F*, it should have the following characteristics:
++ *F&& function*: For the function argument *F*, it should have the following characteristics:
 ```C++
 auto result = function(x);
 ```
@@ -166,7 +166,7 @@ The input *x* of the *function* should be an array pointer, and *result* is the 
 
 ```C++
 template<int Dim,int Pop_Size,int Max,bool Memory_Flag=false,typename F,std::floating_point T,typename Parameter_Type=algorithm_parameter<T>>
-inline auto algorithm_func(F function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept {
+inline auto algorithm_func(F&& function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept {
 // middle process omitted
 if constexpr(Memory_Flag)
         return std::make_tuple(best_pos, best_fit,convergence_curve);
@@ -183,7 +183,7 @@ if constexpr(!Memory_Flag)
 
 ```C++
 template<int Dim,int Pop_Size,int Max,bool Memory_Flag=false,typename F,std::floating_point T,typename Parameter_Type=algorithm_parameter<T>>
-inline auto algorithm_func(F function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept {
+inline auto algorithm_func(F&& function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept {
 
 /*
  Middle process omitted
@@ -244,7 +244,7 @@ struct single_algorithm_parameter;
 
 &emsp;In the *single_algorithm.hpp* header file, there is also a macro expression defined called *REGISTER_ALGORITHM(func_name, func, parameter)*.
 
-&emsp;The *REGISTER_ALGORITHM(func_name, func, parameter)* macro expression allows the algorithm function *func* to become a partial specialization of the *single_algorithm* class and generates a *func_name* variable representing the *Hash* value of the algorithm function *func*. After partial specialization, the *single_algorithm* class has a static member string array variable *name* (used to represent the algorithm name as *func_name*) and an [operator overload function](https://en.cppreference.com/w/cpp/language/operators) *inline auto operator()(F f, T l, T r)*. The specialized *single_algorithm* class can be treated as a [function object](https://en.cppreference.com/w/cpp/utility/functional). Similarly, the *parameter* generates a partial specialization of the *single_algorithm_parameter* class, which inherits from the parameter class. For more details, please refer to the implementation code in *single_algorithm.hpp* regarding the macro expression.
+&emsp;The *REGISTER_ALGORITHM(func_name, func, parameter)* macro expression allows the algorithm function *func* to become a partial specialization of the *single_algorithm* class and generates a *func_name* variable representing the *Hash* value of the algorithm function *func*. After partial specialization, the *single_algorithm* class has a static member string array variable *name* (used to represent the algorithm name as *func_name*) and an [operator overload function](https://en.cppreference.com/w/cpp/language/operators) *inline auto operator()(F &&f, T l, T r)*. The specialized *single_algorithm* class can be treated as a [function object](https://en.cppreference.com/w/cpp/utility/functional). Similarly, the *parameter* generates a partial specialization of the *single_algorithm_parameter* class, which inherits from the parameter class. For more details, please refer to the implementation code in *single_algorithm.hpp* regarding the macro expression.
 
 &emsp;Here is an example demonstrating how users can implement an algorithm and register it:
 
@@ -264,7 +264,7 @@ struct Algorithm_Parameter {
 };
 
 template<int Dim, int Pop_Size, int Max, bool Memory_Flag, typename F, std::floating_point T, typename Parameter_Type = Algorithm_Parameter<T>>
-inline auto Algorithm(F function, T l, T r, const Parameter_Type& pt = Parameter_Type()) noexcept {
+inline auto Algorithm(F&& function, T l, T r, const Parameter_Type& pt = Parameter_Type()) noexcept {
 
 /*
 Declaration process omitted
@@ -676,10 +676,10 @@ struct single_problem<CEC2022,Prob_Index,Dim,T>;
 namespace sevobench {
 
 template<int Dim,int Pop_Size=100,int Max=1000*Dim,bool Memory_Flag=false,typename G,typename F,std::floating_point T,typename Parameter_Type=de_parameter<T>>
-inline auto de_optimize(G &positions,F function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto de_optimize(G &&positions,F&& function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 template<int Dim,int Pop_Size=100,int Max=1000*Dim,bool Memory_Flag=false,typename F,std::floating_point T,typename Parameter_Type=de_parameter<T>>
-inline auto de(F function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto de(F&& function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 }
 ```
@@ -708,10 +708,10 @@ struct de_parameter {
 namespace sevobench {
 
     template<int Dim,int Pop_Size=100,int Max=1000*Dim,bool Memory_Flag=false,typename G,typename F,std::floating_point T,typename Parameter_Type=jade_parameter<T>>
-inline auto jade_optimize(G &positions,F function,T l,T r,const Parameter_Type& pt=Parameter_Type());
+inline auto jade_optimize(G &&positions,F&& function,T l,T r,const Parameter_Type& pt=Parameter_Type());
 
 template<int Dim,int Pop_Size=100,int Max=1000*Dim,bool Memory_Flag=false,typename F,std::floating_point T,typename Parameter_Type=jade_parameter<T>>
-inline auto jade(F function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto jade(F&& function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
  
 }
 ```
@@ -738,7 +738,7 @@ struct jade_parameter {
 namespace sevobench {
 
    template<int Dim,int Pop_Size=100,int Max=1000*Dim,bool Memory_Flag=false,typename F,std::floating_point T,typename Parameter_Type=shade_parameter<T>>
-inline auto shade(F function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept ;
+inline auto shade(F&& function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept ;
 
 }
 ```
@@ -754,7 +754,7 @@ inline auto shade(F function,T l,T r,const Parameter_Type& pt=Parameter_Type()) 
 namespace sevobench {
 
 template<int Dim,int Pop_Size=18*Dim,int Max=1000*Dim,bool Memory_Flag=false,typename F,std::floating_point T,typename Parameter_Type=lshade_parameter<T>>
-inline auto lshade(F function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto lshade(F&& function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 }
 ```
@@ -795,10 +795,10 @@ struct lshade_parameter {
 namespace sevobench {
 
 template<int Dim, int Pop_Size = 30, int Max = 1000*Dim, bool Memory_Flag = false, typename G, typename F, std::floating_point T, typename Parameter_Type=pso_parameter<T>>
-inline auto pso_optimize(G &positions, F f, T left_bound, T right_bound, const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto pso_optimize(G &&positions, F &&f, T left_bound, T right_bound, const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 template<int Dim, int Pop_Size = 30, int Max = 1000*Dim, bool Memory_Flag = false, typename F, std::floating_point T, typename Parameter_Type=pso_parameter<T>>
-inline auto pso(F f, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto pso(F &&f, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 }
 ```
@@ -829,7 +829,7 @@ struct pso_parameter {
 namespace {
 
 template<int Dim, int Pop_Size=30, int Max=1000*Dim, bool Memory_Flag=false, typename F, std::floating_point T, typename Parameter_Type=spso2007_parameter<T>>
-inline auto spso2007(F function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto spso2007(F&& function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 }
 ```
@@ -843,7 +843,7 @@ inline auto spso2007(F function, T l, T r, const Parameter_Type& pt=Parameter_Ty
 namespace sevobench {
 
 template<int Dim, int Pop_Size=30, int Max=1000*Dim, bool Memory_Flag=false, typename F, std::floating_point T, typename Parameter_Type=spso2011_parameter<T>>
-inline auto spso2011(F function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto spso2011(F&& function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 }
 ```
@@ -886,10 +886,10 @@ struct spso2011_parameter {
 namespace sevobench {
 
 template<int Dim, int Pop_Size = 250, int Max = 1000*Dim, bool Memory_Flag = false, typename G, typename F, std::floating_point T, typename Parameter_Type=cso_parameter<T>>
-inline auto cso_optimize(G& positions, F function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto cso_optimize(G &&positions, F&& function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 template<int Dim, int Pop_Size = 250, int Max = 1000*Dim, bool Memory_Flag = false, typename F, std::floating_point T, typename Parameter_Type=cso_parameter<T>>
-inline auto cso(F function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto cso(F&& function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 }
 ```
@@ -916,10 +916,10 @@ struct cso_parameter {
 namespace sevobench {
 
 template<int Dim, int Pop_Size, int Max, bool Memory_Flag = false, typename G, typename F, std::floating_point T, typename Parameter_Type=slpso_parameter<T>>
-inline auto slpso_optimize(G& positions, F function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto slpso_optimize(G &&positions, F&& function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 template<int Dim, int Pop_Size, int Max, bool Memory_Flag = false, typename F, std::floating_point T, typename Parameter_Type=slpso_parameter<T>>
-inline auto slpso(F function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept ;
+inline auto slpso(F&& function, T l, T r, const Parameter_Type& pt=Parameter_Type()) noexcept ;
 
 }
 ```
@@ -959,10 +959,10 @@ struct slpso_parameter {
 namespace sevobench {
 
 template<int Dim,int Pop_Size=100,int Max=1000*Dim,bool Memory_Flag=false,typename G,typename F,std::floating_point T,typename Parameter_Type=abc_parameter<T>>
-inline auto abc_optimize(G &sol,F f,T d,T w,const Parameter_Type &pt=Parameter_Type()) noexcept ;
+inline auto abc_optimize(G&& sol,F &&f,T d,T w,const Parameter_Type &pt=Parameter_Type()) noexcept ;
 
 template<int Dim,int Pop_Size=100,int Max=1000*Dim,bool Memory_Flag=false,typename F,std::floating_point T,typename Parameter_Type=abc_parameter<T>>
-inline auto abc(F f,T d,T w,const Parameter_Type &pt=Parameter_Type()) noexcept;
+inline auto abc(F &&f,T d,T w,const Parameter_Type &pt=Parameter_Type()) noexcept;
 
 }
 ```
@@ -991,10 +991,10 @@ struct abc_parameter {
 namespace sevobench {
 
 template<int Dim,int Pop_Size=1,int Max=1000*Dim,bool Memory_Flag=false,typename G,typename F,std::floating_point T,typename Parameter_Type>
-inline auto random_search_optimize(G &sol,F function,T l,T r,const Parameter_Type&) noexcept ;
+inline auto random_search_optimize(G&& sol,F&& function,T l,T r,const Parameter_Type&) noexcept ;
 
 template<int Dim,int Pop_Size=1,int Max=1000*Dim,bool Memory_Flag=false,typename F,std::floating_point T,typename Parameter_Type>
-inline auto random_search(F function,T l,T r,const Parameter_Type&pt) noexcept ;
+inline auto random_search(F&& function,T l,T r,const Parameter_Type&pt) noexcept ;
 
 }
 ```
@@ -1016,10 +1016,10 @@ inline auto random_search(F function,T l,T r,const Parameter_Type&pt) noexcept ;
 namespace sevobench {
 
 template<int Dim,int Pop_Size=1,int Max=1000*Dim,bool Memory_Flag=false,typename G,typename F,std::floating_point T,typename Parameter_Type=es_parameter<T>>
-inline auto es_optimize(G &sol,F function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto es_optimize(G&& sol,F&& function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 template<int Dim,int Pop_Size=1,int Max=1000*Dim,bool Memory_Flag=false,typename F,std::floating_point T,typename Parameter_Type=es_parameter<T>>
-inline auto es(F function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
+inline auto es(F&& function,T l,T r,const Parameter_Type& pt=Parameter_Type()) noexcept;
 
 }
 ```
