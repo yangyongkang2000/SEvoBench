@@ -1,8 +1,4 @@
-//
-// Created by 杨永康 on 2024/2/24.
-//
 #include"SEvoBench/single_algorithm.hpp"
-#include<valarray>
 template <int N, typename T> T sphere(const T *x) {
   return std::inner_product(x, x + N, x, T(0));
 }

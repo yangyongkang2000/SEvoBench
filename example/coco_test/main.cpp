@@ -1,9 +1,3 @@
-//
-//  main.cpp
-//  coco_test
-//
-//  Created by 杨永康 on 2023/9/11.
-//
 
 #include "problem_wrapper.hpp"
 #include <iostream>

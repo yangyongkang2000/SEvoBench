@@ -1,7 +1,3 @@
-//
-// Created by yyk-22 on 24-1-1.
-//
-
 #ifndef CMAES_TEST_CMAES_TEST_HPP
 #define CMAES_TEST_CMAES_TEST_HPP
 #include "cmaes_interface.h"

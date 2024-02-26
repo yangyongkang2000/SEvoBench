@@ -1,10 +1,3 @@
-//
-//  problem_wrapper.hpp
-//  coco_test
-//
-//  Created by 杨永康 on 2023/9/11.
-//
-
 #ifndef problem_wrapper_h
 #define problem_wrapper_h
 

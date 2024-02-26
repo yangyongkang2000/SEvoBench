@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include "SEvoBench/parallel_algorithm_benchmark.hpp"
 #include "cmaes_test.hpp"
 int main() {
