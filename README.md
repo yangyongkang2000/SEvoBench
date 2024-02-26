@@ -18,3 +18,16 @@ To learn how to use and for more details about the framework, please refer to th
 + [Chinese Documentation](./doc/User_Guide_Chinese.md)
 + [English Documentation](./doc/User_Guide.md)
 
+### Cite this repository
+If you use this software in your work, please cite it as below.
+
+```bibtex
+@software{Yongkang_SEvoBench_A_C_Framework_2024,
+author = {Yongkang, Yang},
+month = feb,
+title = {{SEvoBench:A C++ Framework for Evolutionary Single-Objective Optimization Benchmarking}},
+url = {https://github.com/yangyongkang2000/SEvoBench},
+version = {1.0.0},
+year = {2024}
+} 
+```

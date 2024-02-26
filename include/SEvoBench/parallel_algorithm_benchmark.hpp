@@ -157,15 +157,14 @@ public:
       fs::create_directory(dir);
     }
     if (!graph_data.empty()) {
-      auto len = graph_data.size() / size;
       for (int i = 0; i < size; i++) {
         auto file_path =
             dir / (std::string(algname) + "_" + std::to_string(pop) + "_" +
                    std::string(proname) + "_F" + std::to_string(i + 1) + "_" +
                    std::to_string(dim) + "_curve.txt");
         std::ofstream os(file_path.string());
-        for (int j = 0; j < len; j++)
-          os << graph_data[i * len + j] << '\n';
+        for (int j = 0; j < 2*max; j++)
+          os << graph_data[2*i * max + j] << '\n';
       }
     }
   }
