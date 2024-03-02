@@ -56,3 +56,6 @@ if(BUILD_EXAMPLE)
        add_subdirectory(example)
 endif ()
 
+set(CPACK_PACKAGE_VENDOR "Yongkang Yang")
+set(CPACK_PACKAGE_CONTACT "yangyongkang@ustl.edu.cn")
+include(CPack)

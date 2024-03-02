@@ -28,7 +28,7 @@ If you use this software in your work, please cite it as below.
 author = {Yongkang, Yang},
 month = feb,
 title = {{SEvoBench:A C++ Framework for Evolutionary Single-Objective Optimization Benchmarking}},
-doi=10.5281/zenodo.10707581,
+doi= {10.5281/zenodo.10707581} ,
 url = {https://github.com/yangyongkang2000/SEvoBench},
 version = {1.0.0},
 year = {2024}
