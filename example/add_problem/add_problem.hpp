@@ -1,7 +1,3 @@
-//
-// Created by 杨永康 on 2024/2/14.
-//
-
 #ifndef ADD_PROBLEM_ADD_PROBLEM_HPP
 #define ADD_PROBLEM_ADD_PROBLEM_HPP
 

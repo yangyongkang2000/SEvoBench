@@ -1,6 +1,3 @@
-//
-// Created by 杨永康 on 2024/1/15.
-//
 #include "SEvoBench/parallel_algorithm_benchmark.hpp"
 #include <cstdio>
 int main() {
