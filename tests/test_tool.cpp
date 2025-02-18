@@ -1,4 +1,4 @@
-#include "SEvoBench/tool.hpp"
+#include "SEvoBench/sevobench.hpp"
 #include <cassert>
 #include <iostream>
 
@@ -13,7 +13,7 @@ template <typename T> void test_find_median() {
 
 template <typename T> void test_mean_std() {
   std::vector<T> data{5, 4, 3, 2, 1};
-  auto [mean, std1, min, median_first_half, median, median_second_half, max] =
+  [[maybe_unused]] auto [mean, std1, min, median_first_half, median, median_second_half, max] =
       sevobench::tool::mean_std(data.begin(), data.end());
   assert(mean == 3);
   assert(std::abs(std1 - std::sqrt(2.5)) < T(1e-6));

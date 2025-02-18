@@ -1,5 +1,2 @@
 cmake_minimum_required(VERSION 3.15)
 project(example)
-add_subdirectory(quickstart)
-add_subdirectory(parallel_test)
-add_subdirectory(add_problem)

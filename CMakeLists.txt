@@ -1,12 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(SEvoBench VERSION 1.0.0 LANGUAGES CXX DESCRIPTION "SEvoBench: A C++ Framework for Evolutionary Single-Objective Optimization Benchmarking")
+project(SEvoBench VERSION 2.0.0 LANGUAGES CXX DESCRIPTION "SEvoBench: A C++ Framework for Evolutionary Single-Objective Optimization Benchmarking")
 
 option(BUILD_TESTS "Whether to build test cases with ctest" OFF)
 option(BUILD_EXAMPLE "Whether to build examples" OFF)
 
 add_library(SEvoBench INTERFACE)
-
 
 include(GNUInstallDirs)
 

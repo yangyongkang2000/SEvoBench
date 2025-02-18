@@ -1,5 +1,5 @@
 
-#include "SEvoBench/parallel_task.hpp"
+#include "SEvoBench/sevobench.hpp"
 #include <cassert>
 #include <iostream>
 #include <set>

@@ -1,0 +1,9 @@
+#pragma once
+#include "./algorithm/de_module/de_algorithm.hpp"
+#include "./algorithm/other_algorithm/single_algorithm.hpp"
+#include "./algorithm/pso_module/pso_algorithm.hpp"
+#include "./problem/cec/cec2014.hpp"
+#include "./problem/cec/cec2017.hpp"
+#include "./problem/suite.hpp"
+// #include"./problem/large_scale/cec2010.hpp"
+#include "./experiment/best_so_far_record.hpp"
