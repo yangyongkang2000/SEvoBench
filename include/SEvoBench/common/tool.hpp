@@ -7,6 +7,7 @@
 #include <concepts>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <numbers>
 #include <numeric>
 #include <optional>
@@ -30,14 +31,27 @@ public:
   void seed(unsigned int _) const noexcept { g_seed = _; }
 };
 
+class xorshift32_rand {
+  mutable std::uint32_t g_seed;
+
+public:
+  xorshift32_rand(std::uint32_t _) : g_seed(_) {}
+  auto operator()() const noexcept {
+    g_seed ^= g_seed << 13;
+    g_seed ^= g_seed >> 17;
+    g_seed ^= g_seed << 5;
+    return g_seed;
+  }
+  void seed(std::uint32_t _) const noexcept { g_seed = _; }
+};
 template <int N, std::floating_point T> inline constexpr T Pow(T x) noexcept {
   if constexpr (N <= 0)
     return T(1);
   if constexpr (N % 2 == 0) {
-    auto t = Pow<N / 2,T>(x);
+    auto t = Pow<N / 2, T>(x);
     return t * t;
   } else {
-    return x * Pow<(N - 1),T>(x);
+    return x * Pow<(N - 1), T>(x);
   }
 }
 
@@ -214,17 +228,19 @@ concept random_generator_concept = requires(R r) {
 };
 
 class rng {
-  simple_rand sr;
+  xorshift32_rand sr;
 
 public:
-  rng(unsigned int _ =
+  rng(std::uint32_t _ =
           [] {
             std::random_device rd;
             return rd();
           }())
       : sr(_) {};
   template <typename T> T rand_float(T l = T(0), T r = T(1)) const noexcept {
-    static constexpr T k = T(1) / T(1 + 0x7fff);
+    constexpr T k =
+        T(1) / (static_cast<T>(std::numeric_limits<std::uint32_t>::max()) + 1);
+    ;
     return l + sr() * k * (r - l);
   }
 

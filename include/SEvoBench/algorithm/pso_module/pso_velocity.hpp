@@ -1,3 +1,4 @@
+#pragma once
 #include <concepts>
 #include <vector>
 namespace sevobench::pso_module {

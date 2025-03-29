@@ -173,7 +173,7 @@ void cec14_test_func(double *x, double *f, int nx, int mx, int func_num) {
         for (j = 0; j < nx; j++) {
           fscanf(fpt, "%lf", &OShift[i * nx + j]);
         }
-        // fscanf(fpt,"%*[^\n]%*c");
+        fscanf(fpt, "%*[^\n]%*c");
       }
       for (j = 0; j < nx; j++) {
         fscanf(fpt, "%lf", &OShift[(cf_num - 1) * nx + j]);

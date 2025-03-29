@@ -15,7 +15,6 @@ int main() {
   std::array<double, Dim> f1{};
   std::array<double, Dim> f2{};
   population<double> pop(30, Dim, double(-100), double(100));
-  // population<float> pop1(30,Dim,float(-100),float(100));
   {
     tool::simple_rand sr{100};
     auto suites = problem::suite_builder<problem::cec2017>()

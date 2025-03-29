@@ -49,9 +49,15 @@ public:
   auto replace_mutation(std::unique_ptr<de_mutation<T>> &&ptr) noexcept {
     config_.mutation = std::move(ptr);
   }
+  auto swap_mutation(std::unique_ptr<de_mutation<T>> &ptr) noexcept {
+    config_.mutation.swap(ptr);
+  }
   [[nodiscard]] auto parameter() noexcept { return config_.parameter.get(); }
   auto replace_parameter(std::unique_ptr<de_parameter<T>> &&ptr) noexcept {
     config_.parameter = std::move(ptr);
+  }
+  auto swap_parameter(std::unique_ptr<de_parameter<T>> &ptr) noexcept {
+    config_.parameter.swap(ptr);
   }
   [[nodiscard]] auto constraint_handler() noexcept {
     return config_.constraint_handler.get();
@@ -60,9 +66,16 @@ public:
   replace_constraint_handler(std::unique_ptr<de_constraint<T>> &&ptr) noexcept {
     config_.constraint_handler = std::move(ptr);
   }
+  auto
+  swap_constraint_handler(std::unique_ptr<de_constraint<T>> &ptr) noexcept {
+    config_.constraint_handler.swap(ptr);
+  }
   [[nodiscard]] auto crossover() noexcept { return config_.crossover.get(); }
   auto replace_crossover(std::unique_ptr<de_crossover<T>> &&ptr) noexcept {
     config_.crossover = std::move(ptr);
+  }
+  auto swap_crossover(std::unique_ptr<de_crossover<T>> &ptr) noexcept {
+    config_.crossover.swap(ptr);
   }
   [[nodiscard]] auto population_strategy() noexcept {
     return config_.population_strategy.get();
@@ -71,6 +84,10 @@ public:
       std::unique_ptr<de_population<T>> &&ptr) noexcept {
     config_.population_strategy = std::move(ptr);
   }
+  auto
+  swap_population_strategy(std::unique_ptr<de_population<T>> &ptr) noexcept {
+    config_.population_strategy.swap(ptr);
+  }
   auto archive() noexcept {
     if constexpr (Use_Archive) {
       return config_.archive;
@@ -78,10 +95,21 @@ public:
   }
   auto replace_archive([[maybe_unused]] std::conditional_t<
                        Use_Archive, std::unique_ptr<de_archive<T>> &&, void *>
-                           ptr) {
+                           ptr) noexcept {
     if constexpr (Use_Archive) {
       config_.archive = std::move(ptr);
     }
+  }
+  auto swap_archive([[maybe_unused]] std::conditional_t<
+                    Use_Archive, std::unique_ptr<de_archive<T>> &, void *>
+                        ptr) noexcept {
+    if constexpr (Use_Archive) {
+      config_.archive.swap(ptr);
+    }
+  }
+  void iterator(auto &&pop, auto &&trial, auto &&f, T lb, T ub,
+                evolutionary_algorithm &alg) noexcept {
+    config_.iterator(pop, trial, f, lb, ub, alg);
   }
 };
 

@@ -1,0 +1,534 @@
+
+/*** Start of inlined file: best_so_far_record.hpp ***/
+#pragma once
+
+/*** Start of inlined file: experiment.hpp ***/
+#pragma once
+
+
+/*** Start of inlined file: suite.hpp ***/
+#pragma once
+
+
+/*** Start of inlined file: tool.hpp ***/
+#pragma once
+
+
+namespace sevobench::problem {
+
+template <int Index, int Dim, std::floating_point T>
+  requires(Index > 0) && (Dim > 0)
+struct problem_common {
+  using value_type = T;
+  constexpr static auto index() { return Index; }
+  constexpr static auto dim() { return Dim; }
+};
+
+template <std::floating_point T> struct problem_info {
+  int index;
+  int instance;
+  int dim;
+  T lb;
+  T ub;
+  std::optional<solution<T>> optimum;
+};
+
+template <std::floating_point T> struct problem_state {
+  int evaluations;
+  int run_id;
+  T current_value;
+  std::span<const T> current_x;
+};
+
+template <int First_Index, int Last_Index>
+  requires(First_Index > 0) && (First_Index <= Last_Index)
+inline auto problem_range() noexcept {
+  std::vector<int> v(Last_Index - First_Index + 1);
+  std::iota(v.begin(), v.end(), First_Index);
+  return v;
+}
+
+template <std::floating_point T> class single_problem {
+  problem_info<T> problem_data_;
+
+public:
+  virtual T operator()(std::span<const T>) = 0;
+  virtual ~single_problem() = default;
+  auto index() { return problem_data_.index; }
+  auto instance() { return problem_data_.instance; }
+  auto dim() { return problem_data_.dim; }
+  auto lower_bound() { return problem_data_.lb; }
+  auto upper_bound() { return problem_data_.ub; }
+  auto optimum() { return problem_data_.optimum; }
+  auto optimum_num() {
+    if (problem_data_.optimum)
+      return std::optional<T>(problem_data_.optimum.fitness());
+    else
+      return std::optional<T>(std::nullopt);
+  }
+  const auto &problem_information() { return problem_data_; }
+  single_problem() = default;
+  single_problem(const single_problem &) = default;
+  single_problem(single_problem &&) = default;
+  single_problem &operator=(const single_problem &) = default;
+  single_problem &operator=(single_problem &&) = default;
+  single_problem(const problem_info<T> &_problem_data)
+      : problem_data_(_problem_data) {}
+  single_problem(problem_info<T> &&_problem_data)
+      : problem_data_(std::move(_problem_data)) {}
+};
+namespace detail {
+
+template <typename F>
+concept single_problem_requires =
+    requires(F &&f, std::span<const typename F::value_type> x) {
+      requires std::is_floating_point_v<typename F::value_type>;
+      {
+        f.problem_information()
+      } -> std::same_as<problem_info<typename F::value_type>>;
+      F(std::move(f));
+      { f(x) } -> std::same_as<typename F::value_type>;
+    };
+
+template <typename F>
+  requires single_problem_requires<F>
+class single_problem_wrapper : public single_problem<typename F::value_type> {
+  F f;
+
+public:
+  using problem_type = F;
+  using value_type = typename F::value_type;
+  single_problem_wrapper(const single_problem_wrapper &) = default;
+  single_problem_wrapper(single_problem_wrapper &&) = default;
+  single_problem_wrapper &operator=(const single_problem_wrapper &) = default;
+  single_problem_wrapper &operator=(single_problem_wrapper &&) = default;
+  single_problem_wrapper(F &&_f)
+      : single_problem<value_type>(_f.problem_information()), f(std::move(_f)) {
+  }
+  value_type operator()(std::span<const value_type> x) override { return f(x); }
+};
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T, int I = 1, int S = 0>
+inline constexpr auto get_problem_size() noexcept {
+  if constexpr (single_problem_requires<Problem<I, Dim, T>>) {
+    return get_problem_size<Problem, Dim, T, I + 1, S + 1>();
+  } else {
+    return S;
+  }
+}
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T, typename Arg, int I, int L>
+  requires(L > 0) && requires(Arg arg) { Problem<I, Dim, T>(arg); }
+inline auto generate_problem_factory(auto &v) noexcept {
+  if constexpr (I <= L) {
+    v.emplace_back([](Arg arg) {
+      return std::unique_ptr<single_problem<T>>(
+          std::make_unique<single_problem_wrapper<Problem<I, Dim, T>>>(
+              Problem<I, Dim, T>(arg)));
+    });
+    if constexpr (I <= L - 1)
+      generate_problem_factory<Problem, Dim, T, Arg, I + 1, L>(v);
+  }
+}
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T, typename Arg>
+inline auto generate_problem_factory() noexcept {
+  constexpr auto size = get_problem_size<Problem, Dim, T>();
+  std::vector<std::unique_ptr<single_problem<T>> (*)(Arg)> v;
+  v.reserve(size);
+  generate_problem_factory<Problem, Dim, T, Arg, 1,
+                           get_problem_size<Problem, Dim, T>()>(v);
+  return v;
+}
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T>
+  requires(get_problem_size<Problem, Dim, T>() > 0)
+inline auto filter_problem_indexs(std::vector<int> v) noexcept {
+  constexpr auto size = get_problem_size<Problem, Dim, T>();
+  if (!v.empty()) {
+    for (auto &x : v)
+      x = std::clamp(x, 1, size);
+    std::sort(v.begin(), v.end());
+    auto last = std::unique(v.begin(), v.end());
+    v.erase(last, v.end());
+  }
+  return v;
+}
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T, typename Arg>
+  requires requires { generate_problem_factory<Problem, Dim, T, Arg>(); }
+inline auto create_problems(std::vector<int> arg1, Arg arg2) noexcept {
+  std::vector<std::unique_ptr<single_problem<T>>> result;
+  auto table = generate_problem_factory<Problem, Dim, T, Arg>();
+  auto v = filter_problem_indexs<Problem, Dim, T>(arg1);
+  if constexpr (std::is_same_v<Arg, int>) {
+    arg2 = std::max(1, arg2);
+  };
+  if (!v.empty()) {
+    if constexpr (!std::is_same_v<Arg, int>) {
+      result.reserve(v.size());
+    } else {
+      result.reserve(arg2 * v.size());
+    }
+    for (auto index : v) {
+      if constexpr (!std::is_same_v<Arg, int>) {
+        result.emplace_back(table[index - 1](arg2));
+      } else {
+        for (int i = 1; i <= arg2; i++)
+          result.emplace_back(table[index - 1](i));
+      }
+    }
+  }
+  return result;
+}
+
+} // namespace detail
+
+} // namespace sevobench::problem
+
+/*** End of inlined file: problem.hpp ***/
+
+namespace sevobench::problem {
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T>
+class suite {
+private:
+  std::vector<std::unique_ptr<single_problem<T>>> problems;
+  std::vector<int> prob_ids;
+  int ins_count = 0;
+
+public:
+  using value_type = T;
+  static constexpr auto dim() { return Dim; }
+  auto begin() const { return problems.begin(); }
+  auto end() const { return problems.end(); }
+  auto size() const { return static_cast<int>(problems.size()); }
+  auto instance_count() const { return ins_count; }
+  auto problem_index() const { return prob_ids; }
+  template <typename Arg>
+  suite(std::vector<int> arg1, Arg arg2)
+      : problems(detail::create_problems<Problem, Dim, T>(arg1, arg2)),
+        prob_ids(detail::filter_problem_indexs<Problem, Dim, T>(arg1)),
+        ins_count([&] {
+          if constexpr (std::is_same_v<Arg, int>) {
+            return std::max(arg2, 1);
+          } else
+            return 1;
+        }()) {}
+};
+
+namespace detail {
+struct suite_args {
+  std::vector<int> arg1;
+  std::string dir_name;
+  int ins_count;
+};
+} // namespace detail
+
+template <template <int, int, typename> class Problem, int Dim = 0,
+          std::floating_point T = float, bool B2 = false, bool B3 = true,
+          bool B4 = false, bool B5 = false, bool B6 = false>
+class suite_builder {
+  detail::suite_args args;
+
+public:
+  suite_builder(const detail::suite_args &_args) : args(_args) {}
+  suite_builder(detail::suite_args &&_args) : args(std::move(_args)) {}
+  suite_builder() = default;
+  template <int N> auto dim() {
+    return suite_builder<Problem, N, T, true, B3, B4, B5, B6>(std::move(args));
+  }
+  template <std::floating_point T1> auto type() {
+    return suite_builder<Problem, Dim, T1, B2, true, B4, B5, B6>(
+        std::move(args));
+  }
+  auto dir(std::string dir) {
+    args.dir_name = std::move(dir);
+    return suite_builder<Problem, Dim, T, B2, B3, B4, true, false>(
+        std::move(args));
+  }
+  auto instance_count(int count) {
+    args.ins_count = count;
+    return suite_builder<Problem, Dim, T, B2, B3, B4, false, true>(
+        std::move(args));
+  }
+  auto problem_index(std::vector<int> prob_ids) {
+    args.arg1 = std::move(prob_ids);
+    return suite_builder<Problem, Dim, T, B2, B3, true, B5, B6>(
+        std::move(args));
+  }
+  auto build() {
+    static_assert(B2, "NO SET DIM");
+    static_assert(B3, "NO SET TYPE");
+    static_assert(B4, "NO SET PROBLEM INDEXS");
+    static_assert(B5 || B6, "NO SET INSTANCE COUNT/DIR");
+    if constexpr (B5) {
+      return suite<Problem, Dim, T>(std::move(args.arg1),
+                                    std::move(args.dir_name));
+    } else {
+      return suite<Problem, Dim, T>(std::move(args.arg1), args.ins_count);
+    }
+  }
+};
+} // namespace sevobench::problem
+
+/*** End of inlined file: suite.hpp ***/
+
+
+/*** Start of inlined file: parallel_task.hpp ***/
+#pragma once
+#include <condition_variable>
+#include <deque>
+#include <functional>
+#include <future>
+#include <memory>
+#include <thread>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+namespace sevobench {
+
+namespace parallel_task_detail {
+class task_function_wrapper {
+  struct impl_base {
+    virtual void call() = 0;
+    virtual ~impl_base() {};
+  };
+  template <typename F> struct impl_type : impl_base {
+    F f;
+    void call() override { f(); }
+    impl_type(F &&_f) : f(std::move(_f)) {}
+  };
+  std::unique_ptr<impl_base> impl;
+
+public:
+  void operator()() noexcept { impl->call(); }
+  template <typename F>
+  task_function_wrapper(F &&f) : impl(new impl_type<F>(std::move(f))) {}
+  task_function_wrapper() = default;
+  task_function_wrapper(task_function_wrapper &) = delete;
+  task_function_wrapper(const task_function_wrapper &) = delete;
+  task_function_wrapper &operator=(const task_function_wrapper &) = delete;
+  task_function_wrapper(task_function_wrapper &&other)
+      : impl(std::move(other.impl)) {}
+  task_function_wrapper &operator=(task_function_wrapper &&other) {
+    impl = std::move(other.impl);
+    return *this;
+  }
+};
+template <typename T> class threadsafe_queue {
+  std::mutex mut;
+  std::deque<T> data_queue;
+  std::condition_variable data_cond;
+
+public:
+  void push(T new_value) noexcept {
+    {
+      std::lock_guard<std::mutex> lck(mut);
+      data_queue.push_back(std::move(new_value));
+    }
+    data_cond.notify_one();
+  }
+  bool try_pop(T &value) noexcept {
+    std::lock_guard<std::mutex> lck(mut);
+    if (data_queue.empty())
+      return false;
+    value = std::move(data_queue.front());
+    data_queue.pop_front();
+    return true;
+  }
+};
+} // namespace parallel_task_detail
+
+class parallel_task {
+
+  std::vector<std::thread> ts;
+  parallel_task_detail::threadsafe_queue<
+      parallel_task_detail::task_function_wrapper>
+      tasks;
+  bool done;
+  void work_thread() noexcept {
+    while (!done) {
+      parallel_task_detail::task_function_wrapper task;
+      if (tasks.try_pop(task)) {
+        task();
+      } else {
+        std::this_thread::yield();
+      }
+    }
+  }
+
+public:
+  parallel_task(unsigned int _sz) : done(false) {
+    ts.reserve(_sz);
+    for (unsigned int i = 0; i < _sz; i++)
+      ts.emplace_back(&parallel_task::work_thread, this);
+  }
+  parallel_task() : parallel_task(std::thread::hardware_concurrency()) {}
+  template <class Function, class... Args>
+  [[nodiscard]] std::future<std::invoke_result_t<Function, Args...>>
+  submit(Function &&f, Args &&...args) noexcept {
+    auto g = [f = std::forward<Function>(f),
+              ... args = std::forward<Args>(args)] { return f(args...); };
+    auto pt(std::packaged_task<std::invoke_result_t<Function, Args...>()>(
+        std::move(g)));
+    auto res = pt.get_future();
+    tasks.push(std::move(pt));
+    return res;
+  }
+  ~parallel_task() noexcept {
+    done = true;
+    for (auto &_ : ts)
+      if (_.joinable())
+        _.join();
+  }
+};
+
+} // namespace sevobench
+
+/*** End of inlined file: parallel_task.hpp ***/
+
+namespace sevobench::experiment {
+
+template <std::floating_point T> struct suite_observer {
+  virtual void log(const problem::problem_state<T> &,
+                   const problem::problem_info<T> &) = 0;
+  virtual ~suite_observer() = default;
+};
+
+namespace detail {
+template <std::floating_point T, typename S> struct suite_problem {
+private:
+  problem::single_problem<T> *p;
+  S &o;
+  mutable int run_id = 0;
+  mutable int evals = 0;
+
+public:
+  suite_problem(problem::single_problem<T> *_p, S &_o, int _run_id)
+      : p(_p), o(_o), run_id(_run_id) {}
+  auto operator()(std::span<const T> x) const noexcept {
+    auto value = (*p)(x);
+    o.log(problem::problem_state<T>{.evaluations = ++evals,
+                                    .run_id = run_id,
+                                    .current_value = value,
+                                    .current_x = x},
+          p->problem_information());
+    return value;
+  }
+  auto lower_bound() const noexcept { return p->lower_bound(); }
+  auto upper_bound() const noexcept { return p->upper_bound(); }
+};
+
+} // namespace detail
+
+template <bool parallel = true>
+inline auto evo_bench(auto &&alg, auto &&su, auto &&obs,
+                      int independent_runs) noexcept {
+  [[maybe_unused]] std::conditional_t<parallel, parallel_task, void *> pt{};
+  [[maybe_unused]] std::conditional_t<parallel, std::vector<std::future<void>>,
+                                      void *> v{};
+  if constexpr (parallel) {
+    v.reserve(su.size() * independent_runs);
+  }
+  for (const auto &p : su) {
+    constexpr auto b1 =
+        requires { alg(*p, p->lower_bound(), p->upper_bound()); };
+    constexpr auto b2 = requires { alg(*p); };
+    static_assert(b1 || b2, "ALGORITHM IS INVALID!");
+    for (int i = 0; i < independent_runs; i++) {
+      auto temp_p = detail::suite_problem(p.get(), obs, i + 1);
+      if constexpr (b1) {
+        if constexpr (parallel) {
+          v.emplace_back(pt.submit([=] {
+            alg(temp_p, temp_p.upper_bound(), temp_p.upper_bound());
+          }));
+        } else {
+          alg(temp_p, temp_p.lower_bound(), temp_p.upper_bound());
+        }
+      } else {
+        if constexpr (parallel) {
+          v.emplace_back(pt.submit([=] { alg(temp_p); }));
+        } else {
+          alg(temp_p);
+        }
+      }
+    }
+  }
+  if constexpr (parallel) {
+    for (auto &_ : v)
+      _.get();
+  }
+}
+} // namespace sevobench::experiment
+
+/*** End of inlined file: experiment.hpp ***/
+
+
+namespace sevobench::experiment {
+template <std::floating_point T>
+class best_so_far_record final : public suite_observer<T> {
+public:
+  using value_type = T;
+  using data_type = std::vector<std::pair<int, T>>;
+
+private:
+  std::vector<T> bests;
+  const std::vector<int> pro_index;
+  std::vector<std::vector<data_type>> data_;
+  const int ins_count_;
+  const int max_fes_;
+  const int step_;
+  const int runs_;
+
+public:
+  best_so_far_record(const auto &_suite, int _max_fes, int _runs, int _step)
+      : bests(_runs * _suite.size(), std::numeric_limits<T>::max()),
+        pro_index(_suite.problem_index()), ins_count_(_suite.instance_count()),
+        max_fes_(_max_fes), step_(_step), runs_(_runs) {
+    data_.resize(_suite.size());
+    for (auto &d : data_) {
+      d.resize(_runs);
+      for (auto &v : d) {
+        v.reserve(_max_fes / _step);
+      }
+    }
+  }
+  void log(const problem::problem_state<T> &state,
+           const problem::problem_info<T> &info) override {
+    auto m = std::find(pro_index.begin(), pro_index.end(), info.index) -
+             pro_index.begin();
+    auto n = info.instance;
+    auto p = (m * ins_count_ + n - 1) * runs_ + state.run_id - 1;
+    auto &_best = bests[p];
+    _best = std::min(_best, state.current_value);
+    if (state.evaluations % step_ == 0) {
+      if (state.evaluations <= max_fes_) {
+        auto i1 = (m * ins_count_ + n - 1);
+        data_[i1][state.run_id - 1].emplace_back(state.evaluations, _best);
+      }
+    }
+  }
+  auto at(int problem_index) const noexcept {
+    auto m = std::find(pro_index.begin(), pro_index.end(), problem_index) -
+             pro_index.begin();
+    return std::span<const std::vector<data_type>>(
+        data_.data() + m * ins_count_, ins_count_);
+  }
+  auto at(int problem_index, int instance) const noexcept {
+    auto m = std::find(pro_index.begin(), pro_index.end(), problem_index) -
+             pro_index.begin();
+    return std::span<const data_type>(data_[m * ins_count_ + instance - 1]);
+  }
+  auto best() const noexcept { return std::span<const T>(bests); }
+};
+} // namespace sevobench::experiment
+/*** End of inlined file: best_so_far_record.hpp ***/
+

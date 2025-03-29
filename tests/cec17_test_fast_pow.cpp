@@ -201,7 +201,7 @@ void cec17_test_func(double *x, double *f, int nx, int mx, int func_num) {
         for (j = 0; j < nx; j++) {
           fscanf(fpt, "%lf", &OShift[i * nx + j]);
         }
-        // fscanf(fpt,"%*[^\n]%*c");
+        fscanf(fpt, "%*[^\n]%*c");
       }
       for (j = 0; j < nx; j++) {
         fscanf(fpt, "%lf", &OShift[(cf_num - 1) * nx + j]);
@@ -449,7 +449,7 @@ void levy_func(double *x, double *f, int nx, double *Os, double *Mr, int s_flag,
 
   double sum1 = 0.0;
   for (i = 0; i < nx; i++) {
-    w[i] = 1.0 + (z[i] - 1.0) / 4.0;
+    w[i] = 1.0 + (z[i] - 0.0) / 4.0;
   }
 
   // double term1 = pow((sin(PI*w[0])),2);
@@ -561,9 +561,9 @@ void schaffer_F7_func(double *x, double *f, int nx, double *Os, double *Mr,
   sr_func(x, z, nx, Os, Mr, 1.0, s_flag, r_flag); /* shift and rotate */
   // for(i=0;i<nx;i++) printf("Mr[%d]=%f\n",i,Mr[30*29+i]);
   for (i = 0; i < nx - 1; i++) {
-    z[i] = pow(y[i] * y[i] + y[i + 1] * y[i + 1], 0.5);
-    tmp = sin(50.0 * pow(z[i], 0.2));
-    f[0] += pow(z[i], 0.5) + pow(z[i], 0.5) * tmp * tmp;
+    y[i] = pow(z[i] * z[i] + z[i + 1] * z[i + 1], 0.5);
+    tmp = sin(50.0 * pow(y[i], 0.2));
+    f[0] += pow(y[i], 0.5) + pow(y[i], 0.5) * tmp * tmp;
   }
   f[0] = f[0] * f[0] / (nx - 1) / (nx - 1);
 }

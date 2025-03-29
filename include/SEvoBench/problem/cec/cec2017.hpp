@@ -59,7 +59,7 @@ public:
   using cec_common<7, Dim, T, cec2017>::cec_common;
   auto operator()(std::span<const T> x) const {
     return cec_detail::bi_rastrigin_func<Dim, T>(x, this->shift, this->matrix) +
-           T(700);
+           +this->optimum_num();
   }
   static constexpr auto is_basic() { return true; }
 };
@@ -67,9 +67,19 @@ template <int Dim, std::floating_point T>
 class cec2017<8, Dim, T> : public cec_common<8, Dim, T, cec2017> {
 public:
   using cec_common<8, Dim, T, cec2017>::cec_common;
-  static auto evaluate(std::span<T, Dim> x) {
-    return cec_detail::step_rastrigin_func(x);
+  auto operator()(std::span<const T> x) const {
+    std::array<T, Dim> y;
+    std::array<T, Dim> z;
+    for (int i = 0; i < Dim; i++) {
+      y[i] = x[i];
+      if (std::abs(y[i] - this->shift[i]) > T(0.5))
+        y[i] = this->shift[i] +
+               std::floor(2 * (y[i] - this->shift[i]) + T(0.5)) * T(0.5);
+    }
+    cec_detail::sr_func<Dim, false, T>(y, z, this->shift, this->matrix);
+    return cec_detail::rastrigin_func<T, Dim>(z) + this->optimum_num();
   }
+  static constexpr auto is_basic() { return true; }
 };
 template <int Dim, std::floating_point T>
 class cec2017<9, Dim, T> : public cec_common<9, Dim, T, cec2017> {

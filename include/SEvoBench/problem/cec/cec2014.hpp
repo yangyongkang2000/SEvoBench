@@ -265,7 +265,6 @@ public:
       fits[i] = lams[i] * f[i](tmp_x) + biases[i];
     }
     return cec_detail::cf_cal<Dim, cf_num(), T>(x, y, fits, deltas);
-    ;
   }
   static constexpr auto cf_num() { return 3; }
 };

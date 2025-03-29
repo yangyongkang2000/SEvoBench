@@ -1,0 +1,1626 @@
+
+/*** Start of inlined file: de_algorithm.hpp ***/
+#pragma once
+
+
+/*** Start of inlined file: de_config.hpp ***/
+#pragma once
+
+
+/*** Start of inlined file: evolutionary_algorithm.hpp ***/
+#pragma once
+
+namespace sevobench {
+class evolutionary_algorithm {
+protected:
+  int ite = 0;
+  int fes = 0;
+  int mf = 0;
+  int m_ite;
+  int ps = 0;
+  int d = 0;
+
+public:
+  evolutionary_algorithm() = default;
+  evolutionary_algorithm(int _max_fes) : mf(_max_fes) {}
+  evolutionary_algorithm(int _max_fes, int _pop_size)
+      : mf(_max_fes), ps(_pop_size) {}
+  evolutionary_algorithm(int _max_fes, int _pop_size, int _dim)
+      : mf(_max_fes), ps(_pop_size), d(_dim) {}
+  auto current_fes() const noexcept { return fes; }
+  auto max_fes() const noexcept { return mf; }
+  auto max_iterator() const noexcept { return m_ite; }
+  auto set_max_iterator(int _max_iterator) noexcept { m_ite = _max_iterator; }
+  auto set_max_fes(int _max_fes) noexcept { mf = _max_fes; }
+  auto current_iterator() const noexcept { return ite; }
+  auto dim() const noexcept { return d; }
+  auto set_dim(int _dim) noexcept { d = _dim; }
+  auto pop_size() const noexcept { return ps; }
+  auto set_pop_size(int _pop_size) noexcept { ps = _pop_size; }
+  void reset() noexcept {
+    ite = 0;
+    fes = 0;
+  }
+  auto increment_iterator() noexcept { return ++ite; }
+  auto increment_fes() noexcept { return ++fes; }
+  auto add_iterator(int _ite) noexcept { return ite += _ite; }
+  auto add_fes(int _fes) noexcept { return fes += _fes; }
+};
+
+struct evolutionary_algorithm_condition {
+  auto operator()(const auto &, const auto &alg) const noexcept {
+    return alg.current_fes() < alg.max_fes();
+  }
+};
+} // namespace sevobench
+
+/*** End of inlined file: evolutionary_algorithm.hpp ***/
+
+
+/*** Start of inlined file: de_archive.hpp ***/
+
+/*** Start of inlined file: population.hpp ***/
+#pragma once
+
+/*** Start of inlined file: tool.hpp ***/
+#pragma once
+namespace sevobench::tool {
+
+class simple_rand {
+  mutable unsigned int g_seed;
+
+public:
+  simple_rand(unsigned int _) : g_seed(_) {}
+  int operator()() const noexcept {
+    g_seed = (214013 * g_seed + 2531011);
+    return (g_seed >> 16) & 0x7FFF;
+  }
+  void seed(unsigned int _) const noexcept { g_seed = _; }
+};
+
+class xorshift32_rand {
+  mutable std::uint32_t g_seed;
+
+public:
+  xorshift32_rand(std::uint32_t _) : g_seed(_) {}
+  auto operator()() const noexcept {
+    g_seed ^= g_seed << 13;
+    g_seed ^= g_seed >> 17;
+    g_seed ^= g_seed << 5;
+    return g_seed;
+  }
+  void seed(std::uint32_t _) const noexcept { g_seed = _; }
+};
+
+template <std::floating_point T>
+inline auto box_muller(T m, T st, T u, T v) noexcept {
+  return st * std::sqrt(T(-2) * std::log(u)) *
+             std::sin(2 * std::numbers::pi_v<T> * v) +
+         m;
+}
+template <std::floating_point T>
+inline auto cauchy_dis(T a, T b, T y) noexcept {
+  return a + b * std::tan((y - T(0.5)) * std::numbers::pi_v<T>);
+}
+
+template <std::floating_point T, int Max>
+class curve_vector : public std::vector<T> {
+public:
+  curve_vector() : std::vector<T>(2 * Max) {};
+};
+
+template <bool b, std::floating_point T, int Max>
+using curve_t = std::conditional_t<b, curve_vector<T, Max>, void *>;
+
+template <std::floating_point T, int Dim, int Pop_Size>
+inline auto random_generate_position(T l, T r) noexcept {
+  std::vector<std::array<T, Dim>> positions(Pop_Size);
+  std::random_device rd;
+  std::default_random_engine gen(rd());
+  std::uniform_real_distribution<T> dis(l, r);
+  std::for_each_n(positions.begin(), Pop_Size, [&](auto &x) {
+    std::generate_n(x.begin(), Dim, [&] { return dis(gen); });
+  });
+  return positions;
+}
+
+template <std::unsigned_integral T>
+constexpr T alg_hash(const char *s) noexcept {
+  T hv(0);
+  while (*s != '\0')
+    hv = T(131 * hv) + T(*s++);
+  return hv;
+}
+
+template <typename R, typename T>
+concept random_generator_concept = requires(R r) {
+  requires std::same_as<
+      T, std::remove_cvref_t<decltype(r.template rand_float<T>())>>;
+  requires std::same_as<int, std::remove_cvref_t<decltype(r.rand_int(int()))>>;
+  requires std::same_as<T, std::remove_cvref_t<decltype(r.normal(T(), T()))>>;
+  requires std::same_as<T, std::remove_cvref_t<decltype(r.cauchy(T(), T()))>>;
+};
+
+class rng {
+  xorshift32_rand sr;
+
+public:
+  rng(std::uint32_t _ =
+          [] {
+            std::random_device rd;
+            return rd();
+          }())
+      : sr(_) {};
+  template <typename T> T rand_float(T l = T(0), T r = T(1)) const noexcept {
+    constexpr T k =
+        T(1) / (static_cast<T>(std::numeric_limits<std::uint32_t>::max()) + 1);
+    ;
+    return l + sr() * k * (r - l);
+  }
+
+  int rand_int(int n) const noexcept { return sr() % n; }
+  template <typename T> T normal(T m, T st) const noexcept {
+    return box_muller(m, st, rand_float<T>(), rand_float<T>());
+  }
+  template <typename T> T cauchy(T a, T b) const noexcept {
+    return cauchy_dis(a, b, rand_float<T>());
+  }
+  void seed(unsigned int _) const noexcept { sr.seed(_); }
+
+  template <int K> auto pick_random(int n, int j) const noexcept {
+    std::array<int, K> select{};
+    for (int i = 0; i < K; i++) {
+      do {
+        select[i] = rand_int(n);
+      } while (select[i] == j ||
+               std::any_of(select.begin(), select.begin() + i,
+                           [&](auto x) { return select[i] == x; }));
+    }
+    return select;
+  }
+};
+
+} // namespace sevobench::tool
+
+/*** End of inlined file: tool.hpp ***/
+
+
+namespace sevobench {
+
+template <std::floating_point T = float>
+class solution : public std::vector<T> {
+  T _fitness = std::numeric_limits<T>::max();
+
+public:
+  using std::vector<T>::vector;
+  auto fitness() const noexcept { return _fitness; }
+  auto set_fitness(T f) noexcept { _fitness = f; }
+  auto dim() const noexcept { return static_cast<int>(this->size()); }
+  auto evaluate(auto &&f) noexcept {
+    constexpr auto b1 = requires {
+      { f(*this) } -> std::same_as<T>;
+    };
+    constexpr auto b2 = requires {
+      { f(this->data()) } -> std::same_as<T>;
+    };
+    constexpr auto b3 = requires {
+      { f(this->data(), this->size()) } -> std::same_as<T>;
+    };
+    if constexpr (b1) {
+      _fitness = f(*this);
+    } else if constexpr (b2) {
+      _fitness = f(this->data());
+    } else if constexpr (b3) {
+      _fitness = f(this->data(), this->size());
+    } else {
+      static_assert(b1 || b2 || b3, "TYPE OF f IS INVALID");
+    }
+    return _fitness;
+  }
+  template <typename R = tool::rng>
+    requires tool::random_generator_concept<R, T>
+  auto randomize(T lb, T ub, R &&RNG = R()) noexcept {
+    std::generate(this->begin(), this->end(),
+                  [=, &RNG] { return RNG.rand_float(lb, ub); });
+  }
+};
+
+template <std::floating_point T = float>
+class population : public std::vector<solution<T>> {
+  int _dim = 0;
+
+public:
+  template <typename R = tool::rng>
+    requires tool::random_generator_concept<R, T>
+  auto randomize(T lb, T ub, R &&RNG = R()) noexcept {
+    for (auto &_ : *this) {
+      _.randomize(lb, ub, RNG);
+    }
+  }
+  population() = default;
+  population(int dim_) : _dim(dim_) {}
+  population(int _pop_size, int dim_)
+      : std::vector<solution<T>>(_pop_size, solution<T>(dim_)), _dim(dim_) {}
+
+  template <typename R = tool::rng>
+    requires tool::random_generator_concept<R, T>
+  population(int s, int d, T lb, T ub, R &&RNG = R()) : population<T>(s, d) {
+    randomize(lb, ub, RNG);
+  }
+  auto pop_size() const noexcept { return static_cast<int>(this->size()); }
+  auto set_dim(int dim_) noexcept { _dim = dim_; }
+  auto dim() const noexcept { return _dim; }
+};
+} // namespace sevobench
+
+/*** End of inlined file: population.hpp ***/
+
+namespace sevobench::de_module {
+template <std::floating_point T> class de_archive {
+protected:
+  population<T> archive_;
+
+public:
+  virtual std::span<const solution<T>> get() = 0;
+
+  virtual void add(solution<T> &) = 0;
+
+  virtual void resize(const population<T> &) = 0;
+
+  virtual void prepare(const population<T> &) = 0;
+
+  virtual ~de_archive() = default;
+};
+
+template <std::floating_point T>
+class fifo_archive final : public de_archive<T> {
+  int replace_index = 0;
+  int A_Size = 0;
+  int Archive_Size = 0;
+  const T r_Arc = T(2.6);
+
+public:
+  fifo_archive() = default;
+
+  fifo_archive(T ratio_archive) : r_Arc(ratio_archive) {}
+
+  void prepare(const population<T> &pop) override {
+    replace_index = 0;
+    A_Size = 0;
+    Archive_Size = static_cast<int>(pop.pop_size() * r_Arc);
+    this->archive_.resize(Archive_Size, solution<T>(pop.dim()));
+    this->archive_.set_dim(pop.dim());
+  }
+
+  void add(solution<T> &sol) override {
+    std::swap(this->archive_[replace_index++], sol);
+    replace_index %= Archive_Size;
+    A_Size = Archive_Size == A_Size ? Archive_Size : A_Size + 1;
+  }
+
+  void resize(const population<T> &pop) override {
+    if (Archive_Size > static_cast<int>(r_Arc * pop.pop_size())) {
+      Archive_Size = static_cast<int>(r_Arc * pop.pop_size());
+      if (Archive_Size < A_Size) {
+        int len = A_Size - Archive_Size;
+        if ((replace_index < A_Size) && replace_index != 0) {
+          std::rotate(this->archive_.begin(),
+                      this->archive_.begin() + replace_index,
+                      this->archive_.begin() + A_Size);
+        }
+        this->archive_.erase(this->archive_.begin(),
+                             this->archive_.begin() + len);
+        A_Size = Archive_Size;
+        replace_index = 0;
+      } else if (Archive_Size == A_Size) {
+        replace_index %= Archive_Size;
+      }
+    }
+  }
+
+  std::span<const solution<T>> get() override {
+    return std::span<const solution<T>>(this->archive_.data(), A_Size);
+  }
+};
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+class random_archive final : public de_archive<T> {
+  int replace_index = 0;
+  int A_Size = 0;
+  int Archive_Size = 0;
+  const T r_Arc = T(2.6);
+
+public:
+  sevobench::tool::rng RNG;
+  random_archive() = default;
+
+  random_archive(T ratio_archive) : r_Arc(ratio_archive) {}
+
+  void prepare(const population<T> &pop) override {
+    replace_index = 0;
+    A_Size = 0;
+    Archive_Size = static_cast<int>(pop.pop_size() * r_Arc);
+    this->archive_.resize(Archive_Size + pop.pop_size(),
+                          solution<T>(pop.dim()));
+    this->archive_.set_dim(pop.dim());
+  }
+  void add(solution<T> &sol) override {
+    std::swap(this->archive_[replace_index++], sol);
+    A_Size++;
+  }
+  void resize(const population<T> &pop) override {
+    Archive_Size = static_cast<int>(r_Arc * pop.pop_size());
+    if (Archive_Size < A_Size) {
+      int len = A_Size - Archive_Size;
+      for (int i = 0; i < len; i++) {
+        auto i1 = RNG.rand_int(A_Size--);
+        std::swap(this->archive_[i1], this->archive_[A_Size]);
+      }
+      replace_index = Archive_Size;
+    }
+  }
+  std::span<const solution<T>> get() override {
+    return std::span<const solution<T>>(this->archive_.data(), A_Size);
+  }
+};
+} // namespace sevobench::de_module
+
+/*** End of inlined file: de_archive.hpp ***/
+
+
+/*** Start of inlined file: de_constraint.hpp ***/
+#pragma once
+
+#include<memory>
+
+namespace sevobench::de_module {
+template <std::floating_point T> class de_constraint {
+public:
+  virtual void repair(std::span<T>, T, T, std::span<const T>,
+                      std::span<const T>) {}
+
+  virtual bool is_repair(std::span<T>, T, T, std::span<const T>,
+                         std::span<const T>) {
+    return true;
+  }
+
+  virtual ~de_constraint() = default;
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class reinitialization_repair final : public de_constraint<T> {
+public:
+  R RNG;
+
+  void repair(std::span<T> p, T lb, T ub, std::span<const T>,
+              std::span<const T>) override {
+    for (auto &x : p)
+      if (x < lb || x > ub)
+        x = RNG.template rand_float<T>(lb, ub);
+  }
+};
+
+template <std::floating_point T>
+class projection_repair final : public de_constraint<T> {
+public:
+  void repair(std::span<T> p, T lb, T ub, std::span<const T>,
+              std::span<const T>) override {
+    for (auto &x : p)
+      x = std::clamp(x, lb, ub);
+  }
+};
+
+template <std::floating_point T>
+class reflection_repair final : public de_constraint<T> {
+public:
+  void repair(std::span<T> p, T lb, T ub, std::span<const T>,
+              std::span<const T>) override {
+    for (auto &x : p)
+      while (x < lb || x > ub) {
+        if (x < lb) {
+          x = 2 * lb - x;
+        } else {
+          x = 2 * ub - x;
+        }
+      }
+  }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class rand_base_repair final : public de_constraint<T> {
+public:
+  R RNG;
+
+  void repair(std::span<T> p, T lb, T ub, std::span<const T> base,
+              std::span<const T>) override {
+    for (std::size_t i = 0; i < p.size(); i++) {
+      if (p[i] < lb) {
+        p[i] = RNG.rand_float(lb, base[i]);
+      } else if (p[i] > ub) {
+        p[i] = RNG.rand_float(base[i], ub);
+      }
+    }
+  }
+};
+
+template <std::floating_point T>
+class midpoint_base_repair final : public de_constraint<T> {
+public:
+  void repair(std::span<T> p, T lb, T ub, std::span<const T> base,
+              std::span<const T>) override {
+    for (std::size_t i = 0; i < p.size(); i++) {
+      if (p[i] < lb) {
+        p[i] = T(0.5) * (lb + base[i]);
+      } else if (p[i] > ub) {
+        p[i] = T(0.5) * (ub + base[i]);
+        ;
+      }
+    }
+  }
+};
+
+template <std::floating_point T>
+class midpoint_target_repair final : public de_constraint<T> {
+public:
+  void repair(std::span<T> p, T lb, T ub, std::span<const T>,
+              std::span<const T> target) override {
+    for (std::size_t i = 0; i < p.size(); i++) {
+      if (p[i] < lb) {
+        p[i] = T(0.5) * (lb + target[i]);
+      } else if (p[i] > ub) {
+        p[i] = T(0.5) * (ub + target[i]);
+        ;
+      }
+    }
+  }
+};
+
+template <std::floating_point T>
+class resample_repair final : public de_constraint<T> {
+  const int max_resamples = 100;
+  std::unique_ptr<de_constraint<T>> ch =
+      std::make_unique<projection_repair<T>>();
+  int resamples = 0;
+
+public:
+  resample_repair() = default;
+
+  resample_repair(std::unique_ptr<de_constraint<T>> &&_ch,
+                  int _max_resamples = 100)
+      : ch(std::move(_ch)), max_resamples(_max_resamples) {}
+
+  bool is_repair(std::span<T> p, T lb, T ub, std::span<const T> base,
+                 std::span<const T> target) override {
+    if (resamples >= max_resamples) {
+      resamples = 0;
+      ch->repair(p, lb, ub, base, target);
+      return true;
+    }
+    for (auto &x : p)
+      if (x < lb || x > ub) {
+        resamples++;
+        return false;
+      }
+    return true;
+  }
+};
+
+} // namespace sevobench::de_module
+
+/*** End of inlined file: de_constraint.hpp ***/
+
+
+/*** Start of inlined file: de_crossover.hpp ***/
+#pragma once
+
+namespace sevobench::de_module {
+template <std::floating_point T> class de_crossover {
+public:
+  virtual void crossover(std::span<T>, std::span<const T>, T) = 0;
+
+  virtual void prepare(const population<T> &) {};
+
+  virtual ~de_crossover() {};
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class binomial_crossover final : public de_crossover<T> {
+public:
+  R RNG;
+
+  void crossover(std::span<T> donor, std::span<const T> target, T cr) override {
+    auto dim = static_cast<int>(target.size());
+    auto j = RNG.rand_int(dim);
+    for (int i = 0; i < dim; i++)
+      donor[i] =
+          (RNG.template rand_float<T>() < cr || i == j) ? donor[i] : target[i];
+  }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class exponential_crossover final : public de_crossover<T> {
+public:
+  R RNG;
+
+  void crossover(std::span<T> donor, std::span<const T> target, T cr) override {
+    auto dim = static_cast<int>(target.size());
+    int start = RNG.rand_int(dim);
+    int L = 0;
+    while (L < dim && RNG.template rand_float<T>() < cr)
+      L++;
+    int end = (start + L - 1) % dim;
+    if (end < start) {
+      for (int i = end + 1; i < start; i++) {
+        donor[i] = target[i];
+      }
+    } else {
+      for (int i = 0; i < start; i++) {
+        donor[i] = target[i];
+      }
+      for (int i = end + 1; i < dim; i++) {
+        donor[i] = target[i];
+      }
+    }
+  }
+};
+
+} // namespace sevobench::de_module
+
+/*** End of inlined file: de_crossover.hpp ***/
+
+
+/*** Start of inlined file: de_mutation.hpp ***/
+#pragma once
+
+namespace sevobench::de_module {
+
+template <std::floating_point T> class de_mutation {
+public:
+  virtual void prepare(population<T> &) {};
+
+  virtual void mutate(solution<T> &, const population<T> &, T, int) = 0;
+
+  virtual void mutate(solution<T> &, const population<T> &,
+                      std::span<const solution<T>>, T, int) {};
+
+  virtual ~de_mutation() = default;
+
+  virtual int base_index(int i) { return i; }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class rand1_mutation final : public de_mutation<T> {
+  int index;
+
+public:
+  R RNG;
+
+  void mutate(solution<T> &trial, const population<T> &pop, T f,
+              int i) override {
+    auto [r1, r2, r3] = RNG.template pick_random<3>(pop.pop_size(), i);
+    index = r1;
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] = pop[r1][j] + f * (pop[r2][j] - pop[r3][j]);
+    }
+  }
+
+  int base_index(int) override { return index; }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class rand2_mutation final : public de_mutation<T> {
+  int index;
+
+public:
+  R RNG;
+
+  void mutate(solution<T> &trial, const population<T> &pop, T f,
+              int i) override {
+    auto [r1, r2, r3, r4, r5] = RNG.template pick_random<5>(pop.pop_size(), i);
+    index = r1;
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] =
+          pop[r1][j] + f * (pop[r2][j] - pop[r3][j] + pop[r4][j] - pop[r5][j]);
+    }
+  }
+
+  int base_index(int) override { return index; }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class best1_mutation final : public de_mutation<T> {
+  int index;
+
+public:
+  R RNG;
+
+  void prepare(population<T> &pop) override {
+    index =
+        static_cast<int>(std::min_element(pop.begin(), pop.end(),
+                                          [](auto &x, auto &y) {
+                                            return x.fitness() < y.fitness();
+                                          }) -
+                         pop.begin());
+  }
+
+  void mutate(solution<T> &trial, const population<T> &pop, T f,
+              int i) override {
+    auto [r1, r2] = RNG.template pick_random<2>(pop.pop_size(), i);
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] = pop[index][j] + f * (pop[r1][j] - pop[r2][j]);
+    }
+  }
+
+  int base_index(int) override { return index; }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class best2_mutation final : public de_mutation<T> {
+  int index;
+
+public:
+  R RNG;
+
+  void prepare(population<T> &pop) override {
+    index =
+        static_cast<int>(std::min_element(pop.begin(), pop.end(),
+                                          [](auto &x, auto &y) {
+                                            return x.fitness() < y.fitness();
+                                          }) -
+                         pop.begin());
+  }
+
+  void mutate(solution<T> &trial, const population<T> &pop, T f,
+              int i) override {
+    auto [r1, r2, r3, r4] = RNG.template pick_random<4>(pop.pop_size(), i);
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] = pop[index][j] +
+                 f * (pop[r1][j] - pop[r2][j] + pop[r3][j] - pop[r4][j]);
+    }
+  }
+
+  int base_index(int) override { return index; }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class ttpb1_mutation final : public de_mutation<T> {
+  const T p;
+  int P;
+
+public:
+  R RNG;
+
+  ttpb1_mutation(T _p = T(0.11)) : p(_p) {}
+
+  void prepare(population<T> &pop) override {
+    P = static_cast<int>(std::max(pop.pop_size() * p, T(2)));
+    std::nth_element(
+        pop.begin(), pop.begin() + P, pop.begin() + pop.pop_size(),
+        [](auto &x, auto &y) { return x.fitness() < y.fitness(); });
+  }
+
+  void mutate(solution<T> &trial, const population<T> &pop, T f,
+              int i) override {
+    auto r0 = RNG.rand_int(P);
+    auto [r1, r2] = RNG.template pick_random<2>(pop.pop_size(), i);
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] =
+          pop[i][j] + f * (pop[r0][j] - pop[i][j] + pop[r1][j] - pop[r2][j]);
+    }
+  }
+
+  void mutate(solution<T> &trial, const population<T> &pop,
+              std::span<const solution<T>> archives, T f, int i) override {
+    auto r0 = RNG.rand_int(P);
+    int r1, r2;
+    do {
+      r1 = RNG.rand_int(pop.pop_size());
+    } while (r1 == i);
+    do {
+      r2 = RNG.rand_int(pop.pop_size() + static_cast<int>(archives.size()));
+    } while (r2 == i || r2 == r1);
+    const auto &tmp =
+        r2 >= pop.pop_size() ? archives[r2 - pop.pop_size()] : pop[r2];
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] = pop[i][j] + f * (pop[r0][j] - pop[i][j] + pop[r1][j] - tmp[j]);
+    }
+  }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class ttb1_mutation final : public de_mutation<T> {
+  int index;
+
+public:
+  R RNG;
+
+  void prepare(population<T> &pop) override {
+    index = int(std::min_element(pop.begin(), pop.end(),
+                                 [](auto &x, auto &y) {
+                                   return x.fitness() < y.fitness();
+                                 }) -
+                pop.begin());
+  }
+
+  void mutate(solution<T> &trial, const population<T> &pop, T f,
+              int i) override {
+    auto [r1, r2] = RNG.template pick_random<2>(pop.pop_size(), i);
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] =
+          pop[i][j] + f * (pop[index][j] - pop[i][j] + pop[r1][j] - pop[r2][j]);
+    }
+  }
+
+  void mutate(solution<T> &trial, const population<T> &pop,
+              std::span<const solution<T>> archives, T f, int i) override {
+    int r1, r2;
+    do {
+      r1 = RNG.rand_int(pop.pop_size());
+    } while (r1 == i);
+    do {
+      r2 = RNG.rand_int(pop.pop_size() + static_cast<int>(archives.size()));
+    } while (r2 == i || r2 == r1);
+    const auto &tmp =
+        r2 >= pop.pop_size() ? archives[r2 - pop.pop_size()] : pop[r2];
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] =
+          pop[i][j] + f * (pop[index][j] - pop[i][j] + pop[r1][j] - tmp[j]);
+    }
+  }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class ttb2_mutation final : public de_mutation<T> {
+  int index;
+
+public:
+  R RNG;
+
+  void prepare(population<T> &pop) override {
+    index = int(std::min_element(pop.begin(), pop.end(),
+                                 [](auto &x, auto &y) {
+                                   return x.fitness() < y.fitness();
+                                 }) -
+                pop.begin());
+  }
+
+  void mutate(solution<T> &trial, const population<T> &pop, T f,
+              int i) override {
+    auto [r1, r2, r3, r4] = RNG.template pick_random<4>(pop.pop_size(), i);
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] = pop[i][j] + f * (pop[index][j] - pop[i][j] + pop[r1][j] -
+                                  pop[r2][j] + pop[r3][j] - pop[r4][j]);
+    }
+  }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class two_opt1_mutation final : public de_mutation<T> {
+  int index;
+
+public:
+  R RNG;
+
+  void mutate(solution<T> &trial, const population<T> &pop, T f,
+              int i) override {
+    auto [r0, r1, r2] = RNG.template pick_random<3>(pop.pop_size(), i);
+    if (pop[r0].fitness() > pop[r1].fitness())
+      std::swap(r0, r1);
+    index = r0;
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] = pop[r0][j] + f * (pop[r1][j] - pop[r2][j]);
+    }
+  }
+
+  int base_index(int) override { return index; }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class two_opt2_mutation final : public de_mutation<T> {
+  int index;
+
+public:
+  R RNG;
+
+  void mutate(solution<T> &trial, const population<T> &pop, T f,
+              int i) override {
+    auto [r0, r1, r2, r3, r4] = RNG.template pick_random<5>(pop.pop_size(), i);
+    if (pop[r0].fitness() > pop[r1].fitness())
+      std::swap(r0, r1);
+    index = r0;
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] =
+          pop[r0][j] + f * (pop[r1][j] - pop[r2][j] + pop[r3][j] - pop[r4][j]);
+    }
+  }
+
+  int base_index(int) override { return index; }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class ttpb1_weight_mutation final : public de_mutation<T> {
+  const evolutionary_algorithm &alg;
+  const T p_min;
+  const T p_max;
+  int P;
+
+public:
+  R RNG;
+
+  ttpb1_weight_mutation(const evolutionary_algorithm &_alg, T _p_min, T _p_max)
+      : alg(_alg), p_min(_p_min), p_max(_p_max) {}
+
+  void prepare(population<T> &pop) override {
+    auto p = (p_max - p_min) / alg.max_fes() * alg.current_fes() + p_min;
+    P = static_cast<int>(std::max(pop.pop_size() * p, T(2)));
+    std::nth_element(
+        pop.begin(), pop.begin() + P, pop.begin() + pop.pop_size(),
+        [](auto &x, auto &y) { return x.fitness() < y.fitness(); });
+  }
+
+  void mutate(solution<T> &trial, const population<T> &pop, T f,
+              int i) override {
+    auto weight =
+        alg.current_fes() < alg.max_fes() / 5
+            ? T(0.7)
+            : (alg.current_fes() < (2 * alg.max_fes() / 5) ? T(0.8) : T(1.2));
+    auto r0 = RNG.rand_int(P);
+    auto [r1, r2] = RNG.template pick_random<2>(pop.pop_size(), i);
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] = pop[i][j] + f * (weight * (pop[r0][j] - pop[i][j]) +
+                                  pop[r1][j] - pop[r2][j]);
+    }
+  }
+
+  void mutate(solution<T> &trial, const population<T> &pop,
+              std::span<const solution<T>> archives, T f, int i) override {
+    auto weight =
+        alg.current_fes() < alg.max_fes() / 5
+            ? T(0.7)
+            : (alg.current_fes() < (2 * alg.max_fes() / 5) ? T(0.8) : T(1.2));
+    auto r0 = RNG.rand_int(P);
+    int r1, r2;
+    do {
+      r1 = RNG.rand_int(pop.pop_size());
+    } while (r1 == i);
+    do {
+      r2 = RNG.rand_int(pop.pop_size() + static_cast<int>(archives.size()));
+    } while (r2 == i || r2 == r1);
+    const auto &tmp =
+        r2 >= pop.pop_size() ? archives[r2 - pop.pop_size()] : pop[r2];
+    for (int j = 0; j < pop.dim(); j++) {
+      trial[j] = pop[i][j] +
+                 f * (weight * (pop[r0][j] - pop[i][j]) + pop[r1][j] - tmp[j]);
+    }
+  }
+};
+
+} // namespace sevobench::de_module
+
+/*** End of inlined file: de_mutation.hpp ***/
+
+
+/*** Start of inlined file: de_parameter.hpp ***/
+#pragma once
+
+namespace sevobench::de_module {
+template <std::floating_point T> class de_parameter {
+public:
+  virtual void prepare(population<T> &) {}
+
+  virtual void update(const population<T> &, const population<T> &) {}
+
+  virtual T get_f(int) = 0;
+
+  virtual T get_cr(int) = 0;
+
+  virtual ~de_parameter() {};
+};
+
+namespace detail {
+template <std::floating_point T>
+auto jade_update_cr_f(const population<T> &pop, const population<T> &trial,
+                      auto &&Fs, auto &&CRs, auto &&f_archive,
+                      auto &&cr_archive) {
+  auto f_first = f_archive.begin();
+  auto cr_first = cr_archive.begin();
+  auto f_begin = f_first;
+  auto cr_begin = cr_first;
+  for (int i = 0; i < pop.pop_size(); i++) {
+    if (trial[i].fitness() < pop[i].fitness()) {
+      *f_first++ = Fs[i];
+      *cr_first++ = CRs[i];
+    }
+  }
+  auto temp_c =
+      (cr_begin == cr_first)
+          ? T(0)
+          : std::accumulate(cr_begin, cr_first, T(0)) / (cr_first - cr_begin);
+  auto temp_f = (f_first == f_begin)
+                    ? T(0)
+                    : std::inner_product(f_begin, f_first, f_begin, T(0)) /
+                          std::accumulate(f_begin, f_first, T(0));
+  return std::make_pair(temp_c, temp_f);
+}
+
+template <std::floating_point T>
+inline auto shade_update_cr_f(const population<T> &pop,
+                              const population<T> &trial, auto &&Fs, auto &&CRs,
+                              auto &&f_archive, auto &&cr_archive,
+                              auto &&delta_f)
+
+    noexcept {
+  auto size = pop.pop_size();
+  auto f_first = f_archive.begin();
+  auto cr_first = cr_archive.begin();
+  auto df_first = delta_f.begin();
+  for (int i = 0; i < size; i++) {
+    if (trial[i].
+
+        fitness()
+
+        < pop[i].
+
+          fitness()
+
+    ) {
+      *f_first++ = Fs[i];
+      *cr_first++ = CRs[i];
+      *df_first++ = pop[i].
+
+                    fitness()
+
+                    - trial[i].
+
+                      fitness();
+    }
+  }
+  auto scr2 = std::inner_product(cr_archive.begin(), cr_first, delta_f.begin(),
+                                 T(0), std::plus<T>(),
+                                 [](auto x, auto y) { return x * x * y; });
+  auto scr1 =
+      std::inner_product(cr_archive.begin(), cr_first, delta_f.begin(), T(0));
+  auto tmp_cr = (scr1 == T(0) ? T(-1) : scr2 / scr1);
+  auto tmp_f =
+      std::inner_product(f_archive.begin(), f_first, delta_f.begin(), T(0),
+                         std::plus<T>(),
+                         [](auto x, auto y) { return x * x * y; }) /
+      std::inner_product(f_archive.begin(), f_first, delta_f.begin(), T(0));
+  return std::make_pair(tmp_cr, tmp_f);
+}
+
+template <std::floating_point T>
+inline void jade_prepare(const population<T> &pop, auto &&Fs, auto &&CRs,
+                         auto &&RNG, T f_, T cr_)
+
+    noexcept {
+  const int size = pop.pop_size();
+  auto gen_f = [&](auto x) {
+    if (!std::isfinite(x))
+      return T(1);
+    auto z = RNG.cauchy(x, T(0.1));
+    while (z <= 0)
+      z = RNG.cauchy(x, T(0.1));
+    return z < 1 ? z : 1;
+  };
+  for (int i = 0; i < size; i++) {
+    CRs[i] = std::clamp(RNG.normal(cr_, T(0.1)), T(0), T(1));
+    Fs[i] = gen_f(f_);
+  }
+}
+
+template <std::floating_point T>
+inline void shade_prepare(const population<T> &pop, auto &&Fs, auto &&CRs,
+                          auto &&RNG, auto &&MF, auto &&MCR, int memory_size)
+
+    noexcept {
+  const int size = pop.pop_size();
+  auto gen_f = [&](auto x) {
+    if (!std::isfinite(x))
+      return T(1);
+    auto z = RNG.cauchy(x, T(0.1));
+    constexpr int sample_max = 20;
+    for (int i = 0; z <= T(0); i++) {
+      z = RNG.cauchy(x, T(0.1));
+      if (i > sample_max)
+        return T(1);
+    }
+    return z < 1 ? z : T(1);
+  };
+  for (int i = 0; i < size; i++) {
+    auto rp = RNG.rand_int(memory_size);
+    CRs[i] = (MCR[rp] == T(-1)
+                  ? T(0)
+                  : std::clamp(RNG.normal(MCR[rp], T(0.1)), T(0), T(1)));
+    Fs[i] = gen_f(MF[rp]);
+  }
+}
+
+template <std::floating_point T>
+inline void jso_prepare(const population<T> &pop, auto &&Fs, auto &&CRs,
+                        auto &&RNG, auto &&MF, auto &&MCR, int memory_size,
+                        const evolutionary_algorithm &alg)
+
+    noexcept {
+  const auto size = pop.pop_size();
+  auto gen_f = [&](auto x) {
+    if (!std::isfinite(x))
+      return T(1);
+    auto z = RNG.cauchy(x, T(0.1));
+    constexpr int sample_max = 20;
+    for (int i = 0; z <= T(0); i++) {
+      z = RNG.cauchy(x, T(0.1));
+      if (i > sample_max)
+        return T(1);
+    }
+    return z < 1 ? z : T(1);
+  };
+  for (int i = 0; i < size; i++) {
+    auto rp = RNG.rand_int(memory_size);
+    if (rp == memory_size - 1) {
+      MCR[memory_size - 1] = T(0.9);
+      MF[memory_size - 1] = T(0.9);
+    }
+    auto tmp_cr = (MCR[rp] == T(-1)
+                       ? T(0)
+                       : std::clamp(RNG.normal(MCR[rp], T(0.1)), T(0), T(1)));
+    if (alg.
+
+        current_fes()
+
+        < alg.
+
+              max_fes()
+
+              / 4) {
+      tmp_cr = std::max(T(0.7), tmp_cr);
+    } else if (alg.
+
+               current_fes()
+
+               < alg.
+
+                     max_fes()
+
+                     / 2) {
+      tmp_cr = std::max(T(0.6), tmp_cr);
+    }
+    CRs[i] = tmp_cr;
+    auto tmp_f = gen_f(MF[rp]);
+    if (tmp_f > T(0.7) && alg.
+
+                              current_fes()
+
+                              < 3 *
+                                    alg.
+
+                                    max_fes()
+
+                                    / 5) {
+      tmp_f = T(0.7);
+    }
+    Fs[i] = tmp_f;
+  }
+}
+
+} // namespace detail
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class jade_parameter : public de_parameter<T> {
+protected:
+  std::vector<T> f_archive;
+  std::vector<T> cr_archive;
+  std::vector<T> Fs;
+  std::vector<T> CRs;
+  const T c_;
+  const T init_cr;
+  const T init_f;
+  T cr_;
+  T f_;
+
+  void resize(int size)
+
+      noexcept {
+    if (static_cast<int>(f_archive.size()) < size) {
+      f_archive.resize(size);
+      cr_archive.resize(size);
+      Fs.resize(size);
+      CRs.resize(size);
+    }
+  }
+
+public:
+  R RNG;
+
+  jade_parameter(T _cr = T(0.5), T _f = T(0.5), T _c = T(0.1))
+      : c_(_c), init_cr(_cr), init_f(_f), cr_(_cr), f_(_f) {}
+
+  void prepare(population<T> &pop) override {
+    resize(pop.pop_size());
+    detail::jade_prepare(pop, Fs, CRs, RNG, f_, cr_);
+  }
+
+  void update(const population<T> &pop, const population<T> &trial) override {
+    auto [temp_c, temp_f] =
+        detail::jade_update_cr_f(pop, trial, Fs, CRs, f_archive, cr_archive);
+    cr_ = (1 - c_) * cr_ + c_ * temp_c;
+    f_ = (1 - c_) * f_ + c_ * temp_f;
+  }
+
+  T get_f(int i) override { return Fs[i]; }
+
+  T get_cr(int i) override { return CRs[i]; }
+
+  void reset()
+
+      noexcept {
+    cr_ = init_cr;
+    f_ = init_f;
+  }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class shade_parameter : public de_parameter<T> {
+protected:
+  const T memory_f;
+  const T memory_cr;
+  const int memory_size;
+  std::vector<T> MF;
+  std::vector<T> MCR;
+  std::vector<T> f_archive;
+  std::vector<T> cr_archive;
+  std::vector<T> delta_f;
+  std::vector<T> Fs;
+  std::vector<T> CRs;
+  int index_counter = 0;
+
+  void resize(int size)
+
+      noexcept {
+    if (static_cast<int>(f_archive.size()) < size) {
+      f_archive.resize(size);
+      cr_archive.resize(size);
+      delta_f.resize(size);
+      Fs.resize(size);
+      CRs.resize(size);
+    }
+  }
+
+public:
+  R RNG;
+
+  shade_parameter(int _memory_size = 6, T _memory_f = T(0.5),
+                  T _memory_cr = T(0.5))
+      : memory_f(_memory_f), memory_cr(_memory_cr), memory_size(_memory_size),
+        MF(_memory_size, _memory_f), MCR(_memory_size, _memory_cr) {}
+
+  void prepare(population<T> &pop) override {
+    resize(pop.pop_size());
+    detail::shade_prepare(pop, Fs, CRs, RNG, MF, MCR, memory_size);
+  }
+
+  void update(const population<T> &pop, const population<T> &trial) override {
+    auto [mcr, mf] = detail::shade_update_cr_f(pop, trial, Fs, CRs, f_archive,
+                                               cr_archive, delta_f);
+    MCR[index_counter] = mcr;
+    MF[index_counter] = mf;
+    index_counter = (index_counter + 1) % memory_size;
+  }
+
+  T get_f(int i) override { return Fs[i]; }
+
+  T get_cr(int i) override { return CRs[i]; }
+
+  void reset()
+
+      noexcept {
+    index_counter = 0;
+    std::fill(MCR.begin(), MCR.end(), memory_cr);
+    std::fill(MF.begin(), MF.end(), memory_f);
+  }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class jso_parameter final : public shade_parameter<T, R> {
+  const evolutionary_algorithm &alg;
+
+public:
+  jso_parameter(const evolutionary_algorithm &_alg, int _memory_size = 5,
+                T _memory_f = T(0.3), T _memory_cr = T(0.8))
+      : shade_parameter<T, R>(_memory_size, _memory_f, _memory_cr), alg(_alg) {}
+
+  void prepare(population<T> &pop) override {
+    this->resize(pop.pop_size());
+    detail::jso_prepare(pop, this->Fs, this->CRs, this->RNG, this->MF,
+                        this->MCR, this->memory_size, alg);
+  }
+};
+
+template <std::floating_point T>
+class constant_parameter final : public de_parameter<T> {
+  const T f;
+  const T cr;
+
+public:
+  constant_parameter(T _f = T(0.5), T _cr = T(0.9)) : f(_f), cr(_cr) {}
+
+  T get_f(int) override { return f; }
+
+  T get_cr(int) override { return cr; }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+
+class jde_parameter : public de_parameter<T> {
+  const T init_f;
+  const T init_cr;
+  const T fl;
+  const T fu;
+  const T t1;
+  const T t2;
+  T f;
+  T cr;
+
+public:
+  R RNG1;
+  R RNG2;
+  R RNG3;
+  R RNG4;
+
+  jde_parameter(T _fl = T(0.1), T _fu = T(0.9), T _t1 = T(0.1), T _t2 = T(0.1),
+                T _init_f = T(0.5), T _init_cr = T(0.9))
+      : init_f(_init_f), init_cr(_init_cr), fl(_fl), fu(_fu), t1(_t1), t2(_t2) {
+  }
+
+  T get_f(int) override {
+    f = RNG2.template rand_float<T>() < t1
+            ? fl + fu * RNG1.template rand_float<T>()
+            : f;
+    return f;
+  }
+
+  T get_cr(int) override {
+    cr =
+        RNG4.template rand_float<T>() < t2 ? RNG3.template rand_float<T>() : cr;
+    return cr;
+  }
+
+  void reset()
+
+      noexcept {
+    f = init_f;
+    cr = init_cr;
+  }
+};
+
+} // namespace sevobench::de_module
+
+/*** End of inlined file: de_parameter.hpp ***/
+
+
+/*** Start of inlined file: de_population.hpp ***/
+#pragma once
+
+namespace sevobench::de_module {
+template <std::floating_point T> class de_population {
+public:
+  virtual void resize(population<T> &) {};
+
+  virtual ~de_population() {}
+};
+
+template <std::floating_point T>
+class linear_reduction final : public de_population<T> {
+  const evolutionary_algorithm &alg;
+  const int N_Min;
+  const int N_Max;
+
+public:
+  linear_reduction(const evolutionary_algorithm &_alg, int n_min, int n_max)
+      : alg(_alg), N_Min(n_min), N_Max(n_max) {}
+
+  void resize(population<T> &pop) override {
+    auto n = std::max(
+        static_cast<int>(std::round(T(N_Min - N_Max) * T(alg.current_fes()) /
+                                        T(alg.max_fes()) +
+                                    T(N_Max))),
+        N_Min);
+    if (n < pop.pop_size()) {
+      std::nth_element(
+          pop.begin(), pop.begin() + n, pop.begin() + pop.pop_size(),
+          [](auto &x, auto &y) { return x.fitness() < y.fitness(); });
+      pop.resize(n);
+    }
+  }
+};
+
+template <std::floating_point T>
+class non_linear_reduction final : public de_population<T> {
+  const evolutionary_algorithm &alg;
+  const int N_Min;
+  const int N_Max;
+
+public:
+  non_linear_reduction(const evolutionary_algorithm &_alg, int n_min, int n_max)
+      : alg(_alg), N_Min(n_min), N_Max(n_max) {}
+
+  void resize(population<T> &pop) override {
+    auto ratio = T(alg.current_fes()) / T(alg.max_fes());
+    auto n = std::max(
+        static_cast<int>(std::round(
+            T(N_Min - N_Max) * std::pow(ratio, T(1) - ratio) + T(N_Max))),
+        N_Min);
+    if (n < pop.pop_size()) {
+      std::nth_element(
+          pop.begin(), pop.begin() + n, pop.begin() + pop.pop_size(),
+          [](auto &x, auto &y) { return x.fitness() < y.fitness(); });
+      pop.resize(n);
+    }
+  }
+};
+
+} // namespace sevobench::de_module
+
+/*** End of inlined file: de_population.hpp ***/
+
+#include <memory>
+
+namespace sevobench::de_module {
+template <bool Use_Archive, std::floating_point T> struct de_config {
+  std::unique_ptr<de_parameter<T>> parameter;
+  std::unique_ptr<de_mutation<T>> mutation;
+  std::unique_ptr<de_constraint<T>> constraint_handler;
+  std::unique_ptr<de_crossover<T>> crossover;
+  std::unique_ptr<de_population<T>> population_strategy;
+  [[maybe_unused]] std::conditional_t<
+      Use_Archive, std::unique_ptr<de_archive<T>>, void *> archive;
+
+  void iterator(auto &&pop, auto &&trial, auto &&f, T lb, T ub,
+                evolutionary_algorithm &alg) noexcept {
+    parameter->prepare(pop);
+    mutation->prepare(pop);
+    crossover->prepare(pop);
+    for (int i = 0; i < pop.pop_size(); i++) {
+      do {
+        if constexpr (Use_Archive) {
+          mutation->mutate(trial[i], pop, archive->get(), parameter->get_f(i),
+                           i);
+        } else {
+          mutation->mutate(trial[i], pop, parameter->get_f(i), i);
+        }
+        constraint_handler->repair(trial[i], lb, ub,
+                                   pop[mutation->base_index(i)], pop[i]);
+      } while (!constraint_handler->is_repair(
+          trial[i], lb, ub, pop[mutation->base_index(i)], pop[i]));
+      crossover->crossover(trial[i], pop[i], parameter->get_cr(i));
+      trial[i].evaluate(f);
+      alg.increment_fes();
+    }
+    parameter->update(pop, trial);
+    for (int i = 0; i < pop.pop_size(); i++)
+      if (trial[i].fitness() < pop[i].fitness()) {
+        std::swap(trial[i], pop[i]);
+        if constexpr (Use_Archive) {
+          archive->add(trial[i]);
+        }
+      }
+    population_strategy->resize(pop);
+    alg.set_pop_size(pop.pop_size());
+    if constexpr (Use_Archive) {
+      archive->resize(pop);
+    }
+    alg.increment_iterator();
+  }
+};
+} // namespace sevobench::de_module
+
+/*** End of inlined file: de_config.hpp ***/
+
+namespace sevobench::de_module {
+
+template <bool Use_Archive, std::floating_point T> class de_algorithm {
+  de_config<Use_Archive, T> config_;
+
+public:
+  using value_type = T;
+  static constexpr auto use_archive() { return Use_Archive; }
+  de_algorithm(de_algorithm &&) = default;
+
+  de_algorithm &operator=(de_algorithm &&) = default;
+
+  de_algorithm(de_config<Use_Archive, T> &&_config)
+      : config_(std::move(_config)) {}
+
+  template <typename F = evolutionary_algorithm_condition>
+  void run(std::convertible_to<population<T>> auto &&pop, auto &&f, T lb, T ub,
+           evolutionary_algorithm &alg, F condition = {})
+
+      noexcept {
+    population<T> trial(pop.pop_size(), pop.dim());
+    alg.set_pop_size(pop.pop_size());
+    alg.set_dim(pop.dim());
+    if constexpr (Use_Archive) {
+      config_.archive->prepare(pop);
+    }
+    for (auto &_ : pop)
+      _.evaluate(f);
+    alg.add_fes(pop.pop_size());
+    do {
+      config_.iterator(pop, trial, f, lb, ub, alg);
+    } while (condition(pop, alg));
+  }
+  template <typename F = evolutionary_algorithm_condition>
+  void run(std::convertible_to<population<T>> auto &&pop, auto &&f,
+           evolutionary_algorithm &alg, F condition = {})
+
+      noexcept {
+    run(pop, f, f.lower_bound(), f.upper_bound(), alg, condition);
+  }
+
+  [[nodiscard]] auto mutation() noexcept { return config_.mutation.get(); }
+  auto replace_mutation(std::unique_ptr<de_mutation<T>> &&ptr) noexcept {
+    config_.mutation = std::move(ptr);
+  }
+  [[nodiscard]] auto parameter() noexcept { return config_.parameter.get(); }
+  auto replace_parameter(std::unique_ptr<de_parameter<T>> &&ptr) noexcept {
+    config_.parameter = std::move(ptr);
+  }
+  [[nodiscard]] auto constraint_handler() noexcept {
+    return config_.constraint_handler.get();
+  }
+  auto
+  replace_constraint_handler(std::unique_ptr<de_constraint<T>> &&ptr) noexcept {
+    config_.constraint_handler = std::move(ptr);
+  }
+  [[nodiscard]] auto crossover() noexcept { return config_.crossover.get(); }
+  auto replace_crossover(std::unique_ptr<de_crossover<T>> &&ptr) noexcept {
+    config_.crossover = std::move(ptr);
+  }
+  [[nodiscard]] auto population_strategy() noexcept {
+    return config_.population_strategy.get();
+  }
+  auto replace_population_strategy(
+      std::unique_ptr<de_population<T>> &&ptr) noexcept {
+    config_.population_strategy = std::move(ptr);
+  }
+  auto archive() noexcept {
+    if constexpr (Use_Archive) {
+      return config_.archive;
+    }
+  }
+  auto replace_archive([[maybe_unused]] std::conditional_t<
+                       Use_Archive, std::unique_ptr<de_archive<T>> &&, void *>
+                           ptr) {
+    if constexpr (Use_Archive) {
+      config_.archive = std::move(ptr);
+    }
+  }
+};
+
+template <std::floating_point T = float, bool Use_Archive = false,
+          bool B1 = false, bool B2 = false, bool B3 = false, bool B4 = false,
+          bool B5 = false>
+class [[nodiscard]] de_algorithm_builder {
+  de_config<Use_Archive, T> config_;
+
+public:
+  de_algorithm_builder() = default;
+
+  de_algorithm_builder(de_config<Use_Archive, T> &&_config)
+      : config_(std::move(_config)) {}
+
+  template <std::floating_point T1>
+  [[nodiscard]] auto type()
+
+      noexcept {
+    return de_algorithm_builder<T1, Use_Archive, B1, B2, B3, B4, B5>(
+        std::move(config_));
+  }
+
+  [[nodiscard]] auto mutation(std::unique_ptr<de_mutation<T>> &&m)
+
+      noexcept {
+    config_.mutation = std::move(m);
+    return de_algorithm_builder<T, Use_Archive, true, B2, B3, B4, B5>(
+        std::move(config_));
+  }
+
+  [[nodiscard]] auto constraint_handler(std::unique_ptr<de_constraint<T>> &&c)
+
+      noexcept {
+    config_.constraint_handler = std::move(c);
+    return de_algorithm_builder<T, Use_Archive, B1, true, B3, B4, B5>(
+        std::move(config_));
+  }
+
+  [[nodiscard]] auto crossover(std::unique_ptr<de_crossover<T>> &&c)
+
+      noexcept {
+    config_.crossover = std::move(c);
+    return de_algorithm_builder<T, Use_Archive, B1, B2, true, B4, B5>(
+        std::move(config_));
+  }
+
+  [[nodiscard]] auto parameter(std::unique_ptr<de_parameter<T>> &&p)
+
+      noexcept {
+    config_.parameter = std::move(p);
+    return de_algorithm_builder<T, Use_Archive, B1, B2, B3, true, B5>(
+        std::move(config_));
+  }
+
+  [[nodiscard]] auto population_strategy(std::unique_ptr<de_population<T>> &&p)
+
+      noexcept {
+    config_.population_strategy = std::move(p);
+    return de_algorithm_builder<T, Use_Archive, B1, B2, B3, B4, true>(
+        std::move(config_));
+  }
+
+  [[nodiscard]] auto archive(std::unique_ptr<de_archive<T>> &&a)
+
+      noexcept {
+    de_config<true, T> _config{
+        .parameter = std::move(config_.parameter),
+        .mutation = std::move(config_.mutation),
+        .constraint_handler = std::move(config_.constraint_handler),
+        .crossover = std::move(config_.crossover),
+        .population_strategy = std::move(config_.population_strategy),
+        .archive = std::move(a)};
+    return de_algorithm_builder<T, true, B1, B2, B3, B4, B5>(
+        std::move(_config));
+  }
+
+  [[nodiscard]] auto build()
+
+      noexcept {
+    static_assert(B1, "MUTATION IS MISSING!");
+    static_assert(B2, "CONSTRAINT HANDLER IS MISSING!");
+    static_assert(B3, "CROSSOVER IS MISSING!");
+    static_assert(B4, "MUTATION IS MISSING!");
+    static_assert(B5, "POPULATION STRATEGY IS MISSING!");
+    return de_algorithm(std::move(config_));
+  }
+};
+
+} // namespace sevobench::de_module
+
+/*** End of inlined file: de_algorithm.hpp ***/
+
+
+

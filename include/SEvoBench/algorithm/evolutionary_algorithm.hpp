@@ -40,7 +40,7 @@ public:
 
 struct evolutionary_algorithm_condition {
   auto operator()(const auto &, const auto &alg) const noexcept {
-    return alg.current_fes() <= alg.max_fes();
+    return alg.current_fes() < alg.max_fes();
   }
 };
 } // namespace sevobench

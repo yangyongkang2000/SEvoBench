@@ -31,13 +31,23 @@ public:
   auto replace_update(std::unique_ptr<pso_update<T>> &&ptr) noexcept {
     config.update = std::move(ptr);
   }
+  auto swap_update(std::unique_ptr<pso_update<T>> &ptr) noexcept {
+    config.update.swap(ptr);
+  }
   auto topology() noexcept { return config.topology.get(); }
   auto replace_topology(std::unique_ptr<pso_topology<T>> &&ptr) noexcept {
     config.topology = std::move(ptr);
   }
+  auto swap_topology(std::unique_ptr<pso_topology<T>> &ptr) noexcept {
+    config.topology.swap(ptr);
+  }
   auto &constraint_handler() noexcept { return config.constraint_handler; }
   auto replace_constraint_handler(pso_constraint<T> &&pc) noexcept {
     config.constraint_handler = std::move(pc);
+  }
+  void iterator(auto &&pop, auto &&vec, auto &&f, T lb, T ub,
+                evolutionary_algorithm &alg) noexcept {
+    config.iterator(pop, vec, f, lb, ub, alg);
   }
 };
 

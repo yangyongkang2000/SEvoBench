@@ -16,16 +16,16 @@ template <std::floating_point T, typename S> struct suite_problem {
 private:
   problem::single_problem<T> *p;
   S &o;
-  mutable int run_id = 0;
+  mutable int _run_id = 0;
   mutable int evals = 0;
 
 public:
   suite_problem(problem::single_problem<T> *_p, S &_o, int _run_id)
-      : p(_p), o(_o), run_id(_run_id) {}
+      : p(_p), o(_o), _run_id(_run_id) {}
   auto operator()(std::span<const T> x) const noexcept {
     auto value = (*p)(x);
     o.log(problem::problem_state<T>{.evaluations = ++evals,
-                                    .run_id = run_id,
+                                    .run_id = _run_id,
                                     .current_value = value,
                                     .current_x = x},
           p->problem_information());
@@ -33,6 +33,11 @@ public:
   }
   auto lower_bound() const noexcept { return p->lower_bound(); }
   auto upper_bound() const noexcept { return p->upper_bound(); }
+  const auto &problem_information() const noexcept {
+    return p->problem_information();
+  }
+  auto current_fes() const noexcept { return evals; }
+  auto run_id() const noexcept { return _run_id; }
 };
 
 } // namespace detail

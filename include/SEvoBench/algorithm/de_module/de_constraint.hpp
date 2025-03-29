@@ -3,6 +3,7 @@
 
 #include "../../common/population.hpp"
 #include "../../common/tool.hpp"
+#include <memory>
 
 namespace sevobench::de_module {
 template <std::floating_point T> class de_constraint {

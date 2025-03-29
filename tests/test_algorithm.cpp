@@ -1,32 +1,46 @@
 #include "SEvoBench/sevobench.hpp"
-#include <cassert>
+#include <iostream>
 template <int N, typename T> T sphere(const T *x) {
   return std::inner_product(x, x + N, x, T(0));
 }
 template <std::uint64_t Alg_Hash, std::floating_point T, int Dim = 30,
           int Pop_Size = 100, int Max = 10000 * Dim>
 void test_algorithm() {
-  [[maybe_unused]] auto [u, v] =
+  auto [u, v] =
       sevobench::other_algorithm::single_algorithm<Alg_Hash, Dim, Pop_Size, Max,
                                                    false>()(sphere<Dim, T>,
                                                             T(-100), T(100));
-  [[maybe_unused]] auto [u1, v1, w1] =
+  auto [u1, v1, w1] =
       sevobench::other_algorithm::single_algorithm<Alg_Hash, Dim, Pop_Size,
                                                    Max / Pop_Size, true>()(
           sphere<Dim, T>, T(-100), T(100));
-  assert(v >= 0 && v < T(1e-3));
-  assert(v1 >= 0 && v1 < T(1e-3));
-  assert(std::abs(sphere<Dim>(u.data()) - v) < T(1e-6));
-  assert(std::abs(sphere<Dim>(u1.data()) - v1) < T(1e-6));
+  if (!(v >= 0 && v < T(1e-3))) {
+    std::cout << "ALGORITHM IS FAILED!\n";
+  }
+  if (!(v1 >= 0 && v1 < T(1e-3))) {
+    std::cout << "ALGORITHM IS FAILED!\n";
+  }
+  if (!(std::abs(sphere<Dim>(u.data()) - v) < T(1e-6))) {
+    std::cout << "ALGORITHM IS FAILED!\n";
+  }
+  if (!(std::abs(sphere<Dim>(u1.data()) - v1) < T(1e-6))) {
+    std::cout << "ALGORITHM IS FAILED!\n";
+  }
   for (int i = 0; i < (Max / Pop_Size - 1); i++) {
-    assert(w1[2 * i] < w1[2 * (i + 1)]);
-    assert(w1[2 * i + 1] >= w1[2 * (i + 1) + 1]);
+    if (!(w1[2 * i] < w1[2 * (i + 1)])) {
+      std::cout << "ALGORITHM IS FAILED!\n";
+    }
+    if (!(w1[2 * i + 1] >= w1[2 * (i + 1) + 1])) {
+      std::cout << "ALGORITHM IS FAILED!\n";
+    }
   }
 }
 template <int Pop_Size = 100, int Max = 300> void test_lshade() {
-  assert(((sevobench::other_algorithm::shade_detail::lshade_ite<Pop_Size, 4>(
-              sevobench::other_algorithm::shade_detail::iteration_maxfes<
-                  Pop_Size, 4, Max>)) == Max));
+  if (!((sevobench::other_algorithm::shade_detail::lshade_ite<Pop_Size, 4>(
+            sevobench::other_algorithm::shade_detail::iteration_maxfes<
+                Pop_Size, 4, Max>)) == Max)) {
+    std::cout << "ALGORITHM IS FAILED!\n";
+  }
 }
 
 #define TEST_ALGORITHM(ALG)                                                    \

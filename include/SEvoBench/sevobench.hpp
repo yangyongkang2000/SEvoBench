@@ -4,6 +4,7 @@
 #include "./algorithm/pso_module/pso_algorithm.hpp"
 #include "./problem/cec/cec2014.hpp"
 #include "./problem/cec/cec2017.hpp"
+#include "./problem/cec/cec2022.hpp"
 #include "./problem/suite.hpp"
 // #include"./problem/large_scale/cec2010.hpp"
 #include "./experiment/best_so_far_record.hpp"

@@ -1,0 +1,815 @@
+
+/*** Start of inlined file: pso_algorithm.hpp ***/
+#pragma once
+
+/*** Start of inlined file: pso_config.hpp ***/
+#pragma once
+
+/*** Start of inlined file: pso_constraint.hpp ***/
+#pragma once
+
+/*** Start of inlined file: population.hpp ***/
+#pragma once
+
+/*** Start of inlined file: tool.hpp ***/
+#pragma once
+
+
+namespace sevobench::tool {
+
+class simple_rand {
+  mutable unsigned int g_seed;
+
+public:
+  simple_rand(unsigned int _) : g_seed(_) {}
+  int operator()() const noexcept {
+    g_seed = (214013 * g_seed + 2531011);
+    return (g_seed >> 16) & 0x7FFF;
+  }
+  void seed(unsigned int _) const noexcept { g_seed = _; }
+};
+
+class xorshift32_rand {
+  mutable std::uint32_t g_seed;
+
+public:
+  xorshift32_rand(std::uint32_t _) : g_seed(_) {}
+  auto operator()() const noexcept {
+    g_seed ^= g_seed << 13;
+    g_seed ^= g_seed >> 17;
+    g_seed ^= g_seed << 5;
+    return g_seed;
+  }
+  void seed(std::uint32_t _) const noexcept { g_seed = _; }
+};
+
+template <std::floating_point T>
+inline auto box_muller(T m, T st, T u, T v) noexcept {
+  return st * std::sqrt(T(-2) * std::log(u)) *
+             std::sin(2 * std::numbers::pi_v<T> * v) +
+         m;
+}
+template <std::floating_point T>
+inline auto cauchy_dis(T a, T b, T y) noexcept {
+  return a + b * std::tan((y - T(0.5)) * std::numbers::pi_v<T>);
+}
+
+template <std::floating_point T, int Max>
+class curve_vector : public std::vector<T> {
+public:
+  curve_vector() : std::vector<T>(2 * Max) {};
+};
+
+template <bool b, std::floating_point T, int Max>
+using curve_t = std::conditional_t<b, curve_vector<T, Max>, void *>;
+
+template <std::floating_point T, int Dim, int Pop_Size>
+inline auto random_generate_position(T l, T r) noexcept {
+  std::vector<std::array<T, Dim>> positions(Pop_Size);
+  std::random_device rd;
+  std::default_random_engine gen(rd());
+  std::uniform_real_distribution<T> dis(l, r);
+  std::for_each_n(positions.begin(), Pop_Size, [&](auto &x) {
+    std::generate_n(x.begin(), Dim, [&] { return dis(gen); });
+  });
+  return positions;
+}
+
+template <std::unsigned_integral T>
+constexpr T alg_hash(const char *s) noexcept {
+  T hv(0);
+  while (*s != '\0')
+    hv = T(131 * hv) + T(*s++);
+  return hv;
+}
+
+template <typename R, typename T>
+concept random_generator_concept = requires(R r) {
+  requires std::same_as<
+      T, std::remove_cvref_t<decltype(r.template rand_float<T>())>>;
+  requires std::same_as<int, std::remove_cvref_t<decltype(r.rand_int(int()))>>;
+  requires std::same_as<T, std::remove_cvref_t<decltype(r.normal(T(), T()))>>;
+  requires std::same_as<T, std::remove_cvref_t<decltype(r.cauchy(T(), T()))>>;
+};
+
+class rng {
+  xorshift32_rand sr;
+
+public:
+  rng(std::uint32_t _ =
+          [] {
+            std::random_device rd;
+            return rd();
+          }())
+      : sr(_) {};
+  template <typename T> T rand_float(T l = T(0), T r = T(1)) const noexcept {
+    constexpr T k =
+        T(1) / (static_cast<T>(std::numeric_limits<std::uint32_t>::max()) + 1);
+    ;
+    return l + sr() * k * (r - l);
+  }
+
+  int rand_int(int n) const noexcept { return sr() % n; }
+  template <typename T> T normal(T m, T st) const noexcept {
+    return box_muller(m, st, rand_float<T>(), rand_float<T>());
+  }
+  template <typename T> T cauchy(T a, T b) const noexcept {
+    return cauchy_dis(a, b, rand_float<T>());
+  }
+  void seed(unsigned int _) const noexcept { sr.seed(_); }
+
+  template <int K> auto pick_random(int n, int j) const noexcept {
+    std::array<int, K> select{};
+    for (int i = 0; i < K; i++) {
+      do {
+        select[i] = rand_int(n);
+      } while (select[i] == j ||
+               std::any_of(select.begin(), select.begin() + i,
+                           [&](auto x) { return select[i] == x; }));
+    }
+    return select;
+  }
+};
+
+} // namespace sevobench::tool
+
+/*** End of inlined file: tool.hpp ***/
+
+
+namespace sevobench {
+
+template <std::floating_point T = float>
+class solution : public std::vector<T> {
+  T _fitness = std::numeric_limits<T>::max();
+
+public:
+  using std::vector<T>::vector;
+  auto fitness() const noexcept { return _fitness; }
+  auto set_fitness(T f) noexcept { _fitness = f; }
+  auto dim() const noexcept { return static_cast<int>(this->size()); }
+  auto evaluate(auto &&f) noexcept {
+    constexpr auto b1 = requires {
+      { f(*this) } -> std::same_as<T>;
+    };
+    constexpr auto b2 = requires {
+      { f(this->data()) } -> std::same_as<T>;
+    };
+    constexpr auto b3 = requires {
+      { f(this->data(), this->size()) } -> std::same_as<T>;
+    };
+    if constexpr (b1) {
+      _fitness = f(*this);
+    } else if constexpr (b2) {
+      _fitness = f(this->data());
+    } else if constexpr (b3) {
+      _fitness = f(this->data(), this->size());
+    } else {
+      static_assert(b1 || b2 || b3, "TYPE OF f IS INVALID");
+    }
+    return _fitness;
+  }
+  template <typename R = tool::rng>
+    requires tool::random_generator_concept<R, T>
+  auto randomize(T lb, T ub, R &&RNG = R()) noexcept {
+    std::generate(this->begin(), this->end(),
+                  [=, &RNG] { return RNG.rand_float(lb, ub); });
+  }
+};
+
+template <std::floating_point T = float>
+class population : public std::vector<solution<T>> {
+  int _dim = 0;
+
+public:
+  template <typename R = tool::rng>
+    requires tool::random_generator_concept<R, T>
+  auto randomize(T lb, T ub, R &&RNG = R()) noexcept {
+    for (auto &_ : *this) {
+      _.randomize(lb, ub, RNG);
+    }
+  }
+  population() = default;
+  population(int dim_) : _dim(dim_) {}
+  population(int _pop_size, int dim_)
+      : std::vector<solution<T>>(_pop_size, solution<T>(dim_)), _dim(dim_) {}
+
+  template <typename R = tool::rng>
+    requires tool::random_generator_concept<R, T>
+  population(int s, int d, T lb, T ub, R &&RNG = R()) : population<T>(s, d) {
+    randomize(lb, ub, RNG);
+  }
+  auto pop_size() const noexcept { return static_cast<int>(this->size()); }
+  auto set_dim(int dim_) noexcept { _dim = dim_; }
+  auto dim() const noexcept { return _dim; }
+};
+} // namespace sevobench
+
+/*** End of inlined file: population.hpp ***/
+
+
+
+/*** Start of inlined file: pso_velocity.hpp ***/
+#pragma once
+#include <concepts>
+#include <vector>
+namespace sevobench::pso_module {
+template <std::floating_point T> using particle_velocity = std::vector<T>;
+template <std::floating_point T>
+using pso_velocity = std::vector<particle_velocity<T>>;
+} // namespace sevobench::pso_module
+
+/*** End of inlined file: pso_velocity.hpp ***/
+
+#include <algorithm>
+#include <memory>
+
+namespace sevobench::pso_module {
+
+template <std::floating_point T> class velocity_constraint {
+public:
+  virtual void repair_velocity(particle_velocity<T> &) {}
+  virtual ~velocity_constraint() {}
+};
+
+template <std::floating_point T> class positions_constraint {
+public:
+  virtual void repair_position(solution<T> &sol, T lb, T ub) {
+    for (auto &_ : sol)
+      _ = std::clamp(_, lb, ub);
+  }
+  virtual ~positions_constraint() = default;
+};
+
+template <std::floating_point T> struct pso_constraint {
+  std::unique_ptr<velocity_constraint<T>> vc =
+      std::make_unique<velocity_constraint<T>>();
+  std::unique_ptr<positions_constraint<T>> pc =
+      std::make_unique<positions_constraint<T>>();
+  void repair_velocity(particle_velocity<T> &v) { vc->repair_velocity(v); }
+  void repair_position(solution<T> &sol, T lb, T ub) {
+    pc->repair_position(sol, lb, ub);
+  }
+};
+
+template <std::floating_point T>
+class spso_velocity_constraint : public velocity_constraint<T> {
+  const T vmin;
+  const T vmax;
+
+public:
+  spso_velocity_constraint(T _vmin, T _vmax) : vmin(_vmin), vmax(_vmax) {}
+  void repair_velocity(particle_velocity<T> &v) override {
+    for (auto &_ : v)
+      _ = std::clamp(_, vmin, vmax);
+  }
+};
+
+} // namespace sevobench::pso_module
+
+/*** End of inlined file: pso_constraint.hpp ***/
+
+
+
+/*** Start of inlined file: pso_topology.hpp ***/
+#pragma once
+namespace sevobench::pso_module {
+template <std::floating_point T> class pso_topology {
+public:
+  virtual void prepare(const population<T> &) {};
+  virtual solution<T> &local_best(int) = 0;
+  virtual solution<T> &personal_best(int) = 0;
+  virtual void update(const population<T> &) {};
+  virtual solution<T> &best_solution() = 0;
+  virtual T best_value() = 0;
+  virtual int *neighbor(int, int *) = 0;
+  virtual int *informant(int, int *) = 0;
+  virtual ~pso_topology() {};
+};
+namespace detail {
+template <std::floating_point T> class pbest_base : public pso_topology<T> {
+protected:
+  population<T> pbest;
+
+public:
+  solution<T> &personal_best(int i) override { return pbest[i]; }
+  solution<T> &best_solution() override {
+    return *std::min_element(pbest.begin(), pbest.end(), [](auto &x, auto &y) {
+      return x.fitness() < y.fitness();
+    });
+  }
+  T best_value() override {
+    return std::min_element(
+               pbest.begin(), pbest.end(),
+               [](auto &x, auto &y) { return x.fitness() < y.fitness(); })
+        ->fitness();
+  }
+  void update(const population<T> &pop) override {
+    for (int i = 0; i < pop.pop_size(); i++) {
+      if (pop[i].fitness() < pbest[i].fitness()) {
+        pbest[i] = pop[i];
+      }
+    }
+  }
+};
+} // namespace detail
+
+template <std::floating_point T>
+class gbest_topology final : public detail::pbest_base<T> {
+  int min_index;
+
+public:
+  void prepare(const population<T> &pop) override {
+    this->pbest = pop;
+    min_index = static_cast<int>(
+        std::min_element(
+            this->pbest.begin(), this->pbest.end(),
+            [](auto &l, auto &r) { return l.fitness() < r.fitness(); }) -
+        this->pbest.begin());
+  }
+  solution<T> &local_best(int) override { return this->pbest[min_index]; }
+  solution<T> &best_solution() override { return this->pbest[min_index]; }
+  T best_value() override { return this->pbest[min_index].fitness(); }
+  void update(const population<T> &pop) override {
+    for (int i = 0; i < pop.pop_size(); i++) {
+      if (pop[i].fitness() < this->pbest[i].fitness()) {
+        this->pbest[i] = pop[i];
+      }
+    }
+    min_index = static_cast<int>(
+        std::min_element(
+            this->pbest.begin(), this->pbest.end(),
+            [](auto &l, auto &r) { return l.fitness() < r.fitness(); }) -
+        this->pbest.begin());
+  }
+  int *neighbor(int, int *o) override {
+    std::iota(o, o + this->pbest.pop_size(), int(0));
+    return o + this->pbest.pop_size();
+  }
+  int *informant(int i, int *o) override {
+    *o++ = i;
+    if (i != min_index)
+      *o++ = min_index;
+    return o;
+  }
+};
+namespace detail {
+template <int _K, std::floating_point T>
+class kneighbor_topology : public pbest_base<T> {
+protected:
+  std::vector<std::array<int, _K>> topology_index;
+  static constexpr int K = _K;
+
+public:
+  solution<T> &local_best(int i) override {
+    auto index = *std::min_element(
+        topology_index[i].begin(), topology_index[i].end(),
+        [=, this](auto i1, auto i2) {
+          return this->pbest[i1].fitness() < this->pbest[i2].fitness();
+        });
+    return this->pbest[index];
+  }
+
+  int *neighbor(int i, int *o) override {
+    std::copy_n(topology_index[i].data(), _K, o);
+    std::sort(o, o + _K);
+    return std::unique(o, o + _K);
+  }
+
+  int *informant(int i, int *o) override {
+    *o++ = i;
+    auto index = *std::min_element(
+        topology_index[i].begin(), topology_index[i].end(),
+        [=, this](auto i1, auto i2) {
+          return this->pbest[i1].fitness() < this->pbest[i2].fitness();
+        });
+    if (i != index) {
+      *o++ = index;
+    }
+    return o;
+  }
+};
+} // namespace detail
+template <std::floating_point T>
+class lbest_topology final : public detail::kneighbor_topology<3, T> {
+public:
+  void prepare(const population<T> &pop) override {
+    this->pbest = pop;
+    this->topology_index.resize(pop.pop_size());
+    for (int i = 0; i < pop.pop_size(); i++) {
+      for (int j = 0; j < this->K; j++)
+        this->topology_index[i][j] = (i + j - 1) % pop.pop_size();
+      this->topology_index[0][0] = (pop.pop_size() - 1);
+    }
+  }
+};
+template <std::floating_point T, int K = 4, typename R = sevobench::tool::rng>
+  requires tool::random_generator_concept<R, T>
+class random_topology final : public detail::kneighbor_topology<K, T> {
+  const int m = 0;
+  int n = 0;
+
+public:
+  R RNG;
+  random_topology() = default;
+  random_topology(int _m) : m(_m) {}
+  void prepare(const population<T> &pop) override {
+    this->pbest = pop;
+    this->topology_index.resize(pop.pop_size());
+    for (int i = 0; i < pop.pop_size(); i++) {
+      this->topology_index[i][0] = i;
+      for (int j = 1; j < this->K; j++)
+        this->topology_index[i][j] = RNG.rand_int(pop.pop_size());
+    }
+  }
+  void update(const population<T> &pop) override {
+    auto old_value = this->best_value();
+    for (int i = 0; i < pop.pop_size(); i++) {
+      if (pop[i].fitness() < this->pbest[i].fitness()) {
+        this->pbest[i] = pop[i];
+      }
+    }
+    auto new_value = this->best_value();
+    if (new_value < old_value) {
+      n = 0;
+    } else {
+      if (++n > m) {
+        for (int i = 0; i < pop.pop_size(); i++) {
+          this->topology_index[i][0] = i;
+          for (int j = 1; j < this->K; j++)
+            this->topology_index[i][j] = RNG.rand_int(pop.pop_size());
+        }
+        n = 0;
+      }
+    }
+  }
+};
+template <std::floating_point T, typename R = sevobench::tool::rng>
+  requires tool::random_generator_concept<R, T>
+class von_neumann_topology final : public detail::kneighbor_topology<5, T> {
+public:
+  void prepare(const population<T> &pop) override {
+    this->pbest = pop;
+    this->topology_index.resize(pop.pop_size());
+    int rows = static_cast<int>(std::sqrt(pop.pop_size()));
+    while (pop.pop_size() % rows != 0) {
+      rows--;
+    }
+    int const columns = pop.pop_size() / rows;
+    for (int i = 0; i < rows; i++) {
+      for (int j = 0; j < columns; j++) {
+        this->topology_index[i * columns + j][4] = i * columns + j;
+        if (i != rows - 1)
+          this->topology_index[i * columns + j][0] = (i + 1) * columns + j;
+        else
+          this->topology_index[i * columns + j][0] = j;
+
+        if (i != 0)
+          this->topology_index[i * columns + j][1] = (i - 1) * columns + j;
+        else
+          this->topology_index[i * columns + j][1] = (rows - 1) * columns + j;
+
+        if (j != columns - 1)
+          this->topology_index[i * columns + j][2] = i * columns + (j + 1);
+        else
+          this->topology_index[i * columns + j][2] = i * columns;
+
+        if (j != 0)
+          this->topology_index[i * columns + j][3] = i * columns + (j - 1);
+        else
+          this->topology_index[i * columns + j][3] =
+              i * columns + (columns - 1);
+      }
+    }
+  }
+};
+
+} // namespace sevobench::pso_module
+
+/*** End of inlined file: pso_topology.hpp ***/
+
+
+/*** Start of inlined file: pso_update.hpp ***/
+#pragma once
+
+/*** Start of inlined file: evolutionary_algorithm.hpp ***/
+#pragma once
+
+namespace sevobench {
+class evolutionary_algorithm {
+protected:
+  int ite = 0;
+  int fes = 0;
+  int mf = 0;
+  int m_ite;
+  int ps = 0;
+  int d = 0;
+
+public:
+  evolutionary_algorithm() = default;
+  evolutionary_algorithm(int _max_fes) : mf(_max_fes) {}
+  evolutionary_algorithm(int _max_fes, int _pop_size)
+      : mf(_max_fes), ps(_pop_size) {}
+  evolutionary_algorithm(int _max_fes, int _pop_size, int _dim)
+      : mf(_max_fes), ps(_pop_size), d(_dim) {}
+  auto current_fes() const noexcept { return fes; }
+  auto max_fes() const noexcept { return mf; }
+  auto max_iterator() const noexcept { return m_ite; }
+  auto set_max_iterator(int _max_iterator) noexcept { m_ite = _max_iterator; }
+  auto set_max_fes(int _max_fes) noexcept { mf = _max_fes; }
+  auto current_iterator() const noexcept { return ite; }
+  auto dim() const noexcept { return d; }
+  auto set_dim(int _dim) noexcept { d = _dim; }
+  auto pop_size() const noexcept { return ps; }
+  auto set_pop_size(int _pop_size) noexcept { ps = _pop_size; }
+  void reset() noexcept {
+    ite = 0;
+    fes = 0;
+  }
+  auto increment_iterator() noexcept { return ++ite; }
+  auto increment_fes() noexcept { return ++fes; }
+  auto add_iterator(int _ite) noexcept { return ite += _ite; }
+  auto add_fes(int _fes) noexcept { return fes += _fes; }
+};
+
+struct evolutionary_algorithm_condition {
+  auto operator()(const auto &, const auto &alg) const noexcept {
+    return alg.current_fes() < alg.max_fes();
+  }
+};
+} // namespace sevobench
+
+/*** End of inlined file: evolutionary_algorithm.hpp ***/
+
+
+namespace sevobench::pso_module {
+template <std::floating_point T> class pso_update {
+public:
+  virtual void update_velocity(const population<T> &, pso_velocity<T> &,
+                               pso_topology<T> &, int) {};
+  virtual void update_position(population<T> &pop, const pso_velocity<T> &vec,
+                               pso_topology<T> &, int i) {
+    int len = pop.dim();
+    for (int j = 0; j < len; j++)
+      pop[i][j] += vec[i][j];
+  }
+  virtual void update(const population<T> &, pso_topology<T> &) {}
+  virtual ~pso_update() = default;
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+class decrease_inertia_weight_update final : public pso_update<T> {
+  const evolutionary_algorithm &alg;
+  const T w_min = T(0.4);
+  const T w_max = T(0.9);
+  const T c1 = T(2);
+  const T c2 = T(2);
+
+public:
+  R RNG1;
+  R RNG2;
+  decrease_inertia_weight_update(const evolutionary_algorithm &_alg,
+                                 T _w_min = T(0.4), T _w_max = T(0.9),
+                                 T _c1 = T(2), T _c2 = T(2))
+      : alg(_alg), w_min(_w_min), w_max(_w_max), c1(_c1), c2(_c2) {}
+  void update_velocity(const population<T> &pop, pso_velocity<T> &vec,
+                       pso_topology<T> &top, int i) override {
+    int dim = pop.dim();
+    auto &pbest = top.personal_best(i);
+    auto &gbest = top.local_best(i);
+    auto w =
+        w_max + (w_min - w_max) * alg.current_iterator() / alg.max_iterator();
+    for (int j = 0; j < dim; j++) {
+      vec[i][j] =
+          w * vec[i][j] +
+          c1 * (RNG1.template rand_float<T>()) * (pbest[j] - pop[i][j]) +
+          c2 * (RNG2.template rand_float<T>()) * (gbest[j] - pop[i][j]);
+    }
+  }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+class inertia_weight_update final : public pso_update<T> {
+  const T w = T(0.4);
+  const T c1 = T(2);
+  const T c2 = T(2);
+
+public:
+  R RNG1;
+  R RNG2;
+  inertia_weight_update() = default;
+  inertia_weight_update(T _w, T _c1, T _c2) : w(_w), c1(_c1), c2(_c2) {}
+  void update_velocity(const population<T> &pop, pso_velocity<T> &vec,
+                       pso_topology<T> &top, int i) override {
+    int dim = pop.dim();
+    auto &pbest = top.personal_best(i);
+    auto &gbest = top.local_best(i);
+    for (int j = 0; j < dim; j++) {
+      vec[i][j] =
+          w * vec[i][j] +
+          c1 * (RNG1.template rand_float<T>()) * (pbest[j] - pop[i][j]) +
+          c2 * (RNG2.template rand_float<T>()) * (gbest[j] - pop[i][j]);
+    }
+  }
+};
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+class bare_bone_update final : public pso_update<T> {
+public:
+  R RNG;
+  void update_position(population<T> &pop, const pso_velocity<T> &,
+                       pso_topology<T> &top, int i) override {
+    int dim = pop.dim();
+    auto &pbest = top.personal_best(i);
+    auto &gbest = top.local_best(i);
+    for (int j = 0; j < dim; j++) {
+      pop[i][j] = RNG.normal(T(0.5) * (pbest[j] + gbest[j]),
+                             std::abs(pbest[j] - gbest[j]));
+    }
+  }
+};
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+class fips_update : public pso_update<T> {
+  const T phi = T(4.1);
+  const T chi = T(0.729844);
+  std::vector<int> index;
+
+public:
+  R RNG;
+  fips_update() = default;
+  fips_update(T _phi)
+      : phi(_phi), chi(T(2) / (_phi - 2 + std::sqrt(_phi * (_phi - 4)))) {}
+  void update_velocity(const population<T> &pop, pso_velocity<T> &vec,
+                       pso_topology<T> &top, int i) override {
+    int dim = pop.dim();
+    if (static_cast<int>(index.size()) < pop.pop_size()) {
+      index.resize(pop.pop_size());
+    }
+    std::span<int> s(index.data(), top.neighbor(i, index.data()));
+    auto ratio = T(1) / T(s.size());
+    for (auto v : s) {
+      auto &pbest = top.personal_best(v);
+      for (int j = 0; j < dim; j++)
+        vec[i][j] += phi * (RNG.template rand_float<T>()) *
+                     (pbest[j] - pop[i][j]) * ratio;
+    }
+    for (int j = 0; j < dim; j++)
+      vec[i][j] *= chi;
+  }
+};
+
+template <std::floating_point T, typename R = tool::rng>
+  requires tool::random_generator_concept<R, T>
+class spherical_update : public pso_update<T> {
+  const T w = T(1) / T(2 * std::numbers::ln2_v<T>);
+  const T c1 = T(0.5) + std::numbers::ln2_v<T>;
+  const T c2 = T(0.5) + std::numbers::ln2_v<T>;
+  std::vector<T> gpos;
+  std::vector<T> xpos;
+
+public:
+  R RNG1;
+  R RNG2;
+  R RNG3;
+  R RNG4;
+  spherical_update() = default;
+  spherical_update(T _w, T _c1, T _c2) : w(_w), c1(_c1), c2(_c2) {}
+  void update_velocity(const population<T> &pop, pso_velocity<T> &vec,
+                       pso_topology<T> &top, int i) override {
+    auto hypersphere_sample = [](T *first, T r, T *out, int Dim) {
+      auto sum = std::sqrt(std::inner_product(out, out + Dim, out, T(0)));
+      for (int i = 0; i < Dim; i++)
+        out[i] = first[i] + r * out[i] / sum;
+      return out + Dim;
+    };
+    if (static_cast<int>(gpos.size()) < pop.dim()) {
+      gpos.resize(pop.dim());
+      xpos.resize(pop.dim());
+    }
+    T rsquare(0);
+    auto &pbest = top.personal_best(i);
+    auto &lbest = top.local_best(i);
+    for (int j = 0; j < pop.dim(); j++) {
+      auto t = pop[i][j];
+      T tmp = (c1 * (RNG1.template rand_float<T>()) * (pbest[j] - t) +
+               c2 * (RNG2.template rand_float<T>()) * (lbest[j] - t)) /
+              T(3);
+      rsquare += tmp * tmp;
+      gpos[j] = tmp + t;
+    }
+    for (int j = 0; j < pop.dim(); j++)
+      xpos[j] = RNG3.rand_float(T(-1), T(1));
+    hypersphere_sample(gpos.data(),
+                       std::sqrt(rsquare) * (RNG4.template rand_float<T>()),
+                       xpos.data(), pop.dim());
+    for (int j = 0; j < pop.dim(); j++)
+      vec[i][j] = w * vec[i][j] + xpos[j] - pop[i][j];
+  }
+};
+
+} // namespace sevobench::pso_module
+
+/*** End of inlined file: pso_update.hpp ***/
+
+namespace sevobench::pso_module {
+template <std::floating_point T> struct pso_config {
+  std::unique_ptr<pso_update<T>> update;
+  std::unique_ptr<pso_topology<T>> topology;
+  pso_constraint<T> constraint_handler;
+  void iterator(auto &&pop, auto &&vec, auto &&f, T lb, T ub,
+                evolutionary_algorithm &alg) noexcept {
+    for (int i = 0; i < pop.pop_size(); i++) {
+      update->update_velocity(pop, vec, *topology, i);
+      constraint_handler.repair_velocity(vec[i]);
+      update->update_position(pop, vec, *topology, i);
+      constraint_handler.repair_position(pop[i], lb, ub);
+      pop[i].evaluate(f);
+      alg.increment_fes();
+    }
+    update->update(pop, *topology);
+    topology->update(pop);
+    alg.increment_iterator();
+  }
+};
+} // namespace sevobench::pso_module
+
+/*** End of inlined file: pso_config.hpp ***/
+
+
+namespace sevobench::pso_module {
+template <std::floating_point T> class pso_algorithm {
+  pso_config<T> config;
+
+public:
+  using value_type = T;
+  pso_algorithm(pso_config<T> &&_config) : config(std::move(_config)) {}
+  template <typename F = evolutionary_algorithm_condition>
+  void run(std::convertible_to<population<T>> auto &&pop,
+           std::convertible_to<pso_velocity<T>> auto &&vec, auto &&f, T lb,
+           T ub, evolutionary_algorithm &alg, F condition = {}) noexcept {
+    alg.set_pop_size(pop.pop_size());
+    alg.set_dim(pop.dim());
+    for (auto &_ : pop)
+      _.evaluate(f);
+    alg.add_fes(pop.pop_size());
+    config.topology->prepare(pop);
+    do {
+      config.iterator(pop, vec, f, lb, ub, alg);
+    } while (condition(pop, alg));
+  }
+  template <typename F = evolutionary_algorithm_condition>
+  void run(std::convertible_to<population<T>> auto &&pop,
+           std::convertible_to<pso_velocity<T>> auto &&vec, auto &&f,
+           evolutionary_algorithm &alg, F condition = {}) noexcept {
+    run(pop, vec, f, f.lower_bound(), f.upper_bound(), alg, condition);
+  }
+  auto update() noexcept { return config.update.get(); }
+  auto replace_update(std::unique_ptr<pso_update<T>> &&ptr) noexcept {
+    config.update = std::move(ptr);
+  }
+  auto topology() noexcept { return config.topology.get(); }
+  auto replace_topology(std::unique_ptr<pso_topology<T>> &&ptr) noexcept {
+    config.topology = std::move(ptr);
+  }
+  auto &constraint_handler() noexcept { return config.constraint_handler; }
+  auto replace_constraint_handler(pso_constraint<T> &&pc) noexcept {
+    config.constraint_handler = std::move(pc);
+  }
+};
+
+template <std::floating_point T = float, bool B1 = false, bool B2 = false>
+class [[nodiscard]] pso_algorithm_builder {
+  pso_config<T> config_;
+
+public:
+  pso_algorithm_builder() = default;
+  pso_algorithm_builder(pso_config<T> &&_config)
+      : config_(std::move(_config)) {}
+  template <std::floating_point T1> auto type() noexcept {
+    return pso_algorithm_builder<T1, B1, B2>(std::move(config_));
+  }
+  auto update(std::unique_ptr<pso_update<T>> &&ptr) noexcept {
+    config_.update = std::move(ptr);
+    return pso_algorithm_builder<T, true, B2>(std::move(config_));
+  }
+  auto topology(std::unique_ptr<pso_topology<T>> &&ptr) noexcept {
+    config_.topology = std::move(ptr);
+    return pso_algorithm_builder<T, B1, true>(std::move(config_));
+  }
+  auto constraint_handler(pso_constraint<T> &&pc) noexcept {
+    config_.constraint_handler = std::move(pc);
+    return pso_algorithm_builder<T, B1, B2>(std::move(config_));
+  }
+  auto build() noexcept {
+    static_assert(B1, "PSO UPDATE IS MISSING!");
+    static_assert(B2, "PSO TOPOLOGY IS MISSING!");
+    return pso_algorithm<T>(std::move(config_));
+  }
+};
+
+} // namespace sevobench::pso_module
+
+/*** End of inlined file: pso_algorithm.hpp ***/
+

@@ -16,12 +16,8 @@ The SEvoBench framework brings the following highlights:
 ### Future Work
 SEvoBench is still under development, and some features and functionalities of it need improvement. 
 
-### Documentation
-
-> [!NOTE]
-> The full documentation is under development.
-
-
+### Documentations
+[User Guide](./doc/User_Guide.md)
 ### Cite this repository
 If you use this software in your work, please cite it as below.
 

@@ -93,16 +93,16 @@ inline auto calculate_composition(
 } // namespace cec_detail
 
 template <int Index, int Dim, std::floating_point T,
-          template <int, int, std::floating_point> class Drived>
+          template <int, int, typename> class Drived>
 class cec_common : public problem_common<Index, Dim, T> {
 protected:
   std::vector<T> shift;
   std::vector<T> matrix;
   std::vector<int> shuffle;
   int ins = 0;
-  void load_rotate_matrix(const std::string &dir_name) {
+  void load_rotate_matrix(const std::string &dir_name, int idx) {
     std::ostringstream os;
-    os << dir_name << '/' << "M_" << Index << "_D" << Dim << ".txt";
+    os << dir_name << '/' << "M_" << idx << "_D" << Dim << ".txt";
     if constexpr (is_composition_problem()) {
       matrix =
           cec_detail::read_cec_data<Dim * Dim * Drived<Index, Dim, T>::cf_num(),
@@ -111,14 +111,23 @@ protected:
       matrix = cec_detail::read_cec_data<Dim * Dim, T>(os.str());
     }
   }
-  void load_shift_shuffle(const std::string &dir_name) {
+  void load_shift_shuffle(const std::string &dir_name, int idx) {
     {
       std::ostringstream os;
-      os << dir_name << '/' << "shift_data_" << Index << ".txt";
+      os << dir_name << '/' << "shift_data_" << idx << ".txt";
       if constexpr (is_composition_problem()) {
-        shift =
-            cec_detail::read_cec_data<Dim * Drived<Index, Dim, T>::cf_num(), T>(
-                os.str());
+        shift.reserve(Dim * Drived<Index, Dim, T>::cf_num());
+        std::ifstream ifs(os.str());
+        std::string line;
+        for (int _ = 0; _ < Drived<Index, Dim, T>::cf_num(); _++) {
+          std::getline(ifs, line);
+          std::istringstream iss(line);
+          for (int i = 0; i < Dim; i++) {
+            T tmp;
+            iss >> tmp;
+            shift.push_back(tmp);
+          }
+        }
       } else {
         shift = cec_detail::read_cec_data<Dim, T>(os.str());
       }
@@ -133,12 +142,16 @@ protected:
           return 1;
       }();
       std::ostringstream os;
-      os << dir_name << '/' << "shuffle_data_" << Index << "_D" << Dim
-         << ".txt";
+      os << dir_name << '/' << "shuffle_data_" << idx << "_D" << Dim << ".txt";
       shuffle = cec_detail::read_cec_data<num * Dim, int>(os.str());
       for (auto &x : shuffle)
         --x;
     }
+  }
+  cec_common(const std::string &dir_name, int idx) {
+    load_shift_shuffle(dir_name, idx);
+    load_rotate_matrix(dir_name, idx);
+    ins = 1;
   }
 
 public:
@@ -179,8 +192,8 @@ public:
     }
   }
   cec_common(const std::string &dir_name) {
-    load_shift_shuffle(dir_name);
-    load_rotate_matrix(dir_name);
+    load_shift_shuffle(dir_name, Index);
+    load_rotate_matrix(dir_name, Index);
     ins = 1;
   }
   constexpr static auto lower_bound() { return T(-100); }
@@ -235,7 +248,7 @@ public:
                   }) {
       return Drived<Index, Dim, T>::optimum_num();
     } else {
-      return 100 * Index;
+      return T(100 * Index);
     }
   }
 
@@ -245,11 +258,11 @@ public:
     return x;
   }
   auto problem_information() const noexcept {
-    return problem_info<T>{.index = Index,
+    return problem_info<T>{.index = this->index(),
                            .instance = ins,
-                           .dim = Dim,
-                           .lb = T(-100),
-                           .ub = T(100),
+                           .dim = this->dim(),
+                           .lb = lower_bound(),
+                           .ub = upper_bound(),
                            .optimum = optimum_solution()};
   }
   auto operator()(std::span<const T> x) const noexcept {

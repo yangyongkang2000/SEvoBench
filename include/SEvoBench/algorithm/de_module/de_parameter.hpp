@@ -328,7 +328,7 @@ public:
 template <std::floating_point T, typename R = tool::rng>
   requires tool::random_generator_concept<R, T>
 
-class jso_parameter final : public shade_parameter<T, R> {
+class jso_parameter : public shade_parameter<T, R> {
   const evolutionary_algorithm &alg;
 
 public:

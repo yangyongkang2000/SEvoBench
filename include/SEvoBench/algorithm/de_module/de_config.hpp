@@ -16,8 +16,8 @@ template <bool Use_Archive, std::floating_point T> struct de_config {
   std::unique_ptr<de_constraint<T>> constraint_handler;
   std::unique_ptr<de_crossover<T>> crossover;
   std::unique_ptr<de_population<T>> population_strategy;
-  [[maybe_unused]] std::conditional_t<
-      Use_Archive, std::unique_ptr<de_archive<T>>, void *> archive;
+  std::conditional_t<Use_Archive, std::unique_ptr<de_archive<T>>, void *>
+      archive;
 
   void iterator(auto &&pop, auto &&trial, auto &&f, T lb, T ub,
                 evolutionary_algorithm &alg) noexcept {

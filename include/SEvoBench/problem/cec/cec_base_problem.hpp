@@ -70,7 +70,7 @@ inline auto levy_func(std::span<T, M> x) noexcept {
   const auto N = static_cast<int>((M == std::dynamic_extent) ? x.size() : M);
   auto sum =
       tool::Pow<2>(std::sin(std::numbers::pi_v<T> * (1 + T(0.25) * (x[0]))));
-  for (int i = 1; i < N - 1; i++) {
+  for (int i = 0; i < N - 1; i++) {
     auto w = 1 + T(0.25) * (x[i]);
     sum += (w - 1) * (w - 1) *
            (1 + 10 * tool::Pow<2>(std::sin(std::numbers::pi_v<T> * w + 1)));
@@ -252,18 +252,6 @@ inline auto discus_func(std::span<T, M> z) noexcept {
     sum += z[i] * z[i];
   }
   return sum;
-}
-
-template <std::floating_point T, std::size_t M = std::dynamic_extent>
-inline auto step_rastrigin_func(std::span<T, M> z) noexcept {
-  const auto N = static_cast<int>((M == std::dynamic_extent) ? z.size() : M);
-  for (int i = 0; i < N; i++)
-    z[i] = T(0.0512) * z[i];
-  return 10 * N +
-         std::accumulate(z.data(), z.data() + N, T(0), [](auto l, auto r) {
-           r = std::abs(r) >= T(0.5) ? T(0.5) * std::round(2 * r) : r;
-           return l + r * r - 10 * std::cos(2 * std::numbers::pi_v<T> * r);
-         });
 }
 
 template <int N, std::floating_point T>

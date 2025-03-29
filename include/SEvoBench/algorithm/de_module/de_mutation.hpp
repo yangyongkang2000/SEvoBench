@@ -12,8 +12,10 @@ public:
 
   virtual void mutate(solution<T> &, const population<T> &, T, int) = 0;
 
-  virtual void mutate(solution<T> &, const population<T> &,
-                      std::span<const solution<T>>, T, int) {};
+  virtual void mutate(solution<T> &trial, const population<T> &pop,
+                      std::span<const solution<T>>, T f, int i) {
+    mutate(trial, pop, f, i);
+  };
 
   virtual ~de_mutation() = default;
 

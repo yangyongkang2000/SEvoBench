@@ -24,11 +24,17 @@ public:
     constexpr auto b3 = requires {
       { f(this->data(), this->size()) } -> std::same_as<T>;
     };
-    if constexpr (b1) {
+    if constexpr (requires {
+                    { f(*this) } -> std::same_as<T>;
+                  }) {
       _fitness = f(*this);
-    } else if constexpr (b2) {
+    } else if constexpr (requires {
+                           { f(this->data()) } -> std::same_as<T>;
+                         }) {
       _fitness = f(this->data());
-    } else if constexpr (b3) {
+    } else if constexpr (requires {
+                           { f(this->data(), this->size()) } -> std::same_as<T>;
+                         }) {
       _fitness = f(this->data(), this->size());
     } else {
       static_assert(b1 || b2 || b3, "TYPE OF f IS INVALID");

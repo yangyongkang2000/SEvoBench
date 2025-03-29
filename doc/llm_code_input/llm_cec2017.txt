@@ -1,0 +1,1009 @@
+
+/*** Start of inlined file: suite.hpp ***/
+#pragma once
+
+
+/*** Start of inlined file: tool.hpp ***/
+#pragma once
+
+namespace sevobench::problem {
+
+template <int Index, int Dim, std::floating_point T>
+  requires(Index > 0) && (Dim > 0)
+struct problem_common {
+  using value_type = T;
+  constexpr static auto index() { return Index; }
+  constexpr static auto dim() { return Dim; }
+};
+
+template <std::floating_point T> struct problem_info {
+  int index;
+  int instance;
+  int dim;
+  T lb;
+  T ub;
+  std::optional<solution<T>> optimum;
+};
+
+template <std::floating_point T> struct problem_state {
+  int evaluations;
+  int run_id;
+  T current_value;
+  std::span<const T> current_x;
+};
+
+template <int First_Index, int Last_Index>
+  requires(First_Index > 0) && (First_Index <= Last_Index)
+inline auto problem_range() noexcept {
+  std::vector<int> v(Last_Index - First_Index + 1);
+  std::iota(v.begin(), v.end(), First_Index);
+  return v;
+}
+
+template <std::floating_point T> class single_problem {
+  problem_info<T> problem_data_;
+
+public:
+  virtual T operator()(std::span<const T>) = 0;
+  virtual ~single_problem() = default;
+  auto index() { return problem_data_.index; }
+  auto instance() { return problem_data_.instance; }
+  auto dim() { return problem_data_.dim; }
+  auto lower_bound() { return problem_data_.lb; }
+  auto upper_bound() { return problem_data_.ub; }
+  auto optimum() { return problem_data_.optimum; }
+  auto optimum_num() {
+    if (problem_data_.optimum)
+      return std::optional<T>(problem_data_.optimum.fitness());
+    else
+      return std::optional<T>(std::nullopt);
+  }
+  const auto &problem_information() { return problem_data_; }
+  single_problem() = default;
+  single_problem(const single_problem &) = default;
+  single_problem(single_problem &&) = default;
+  single_problem &operator=(const single_problem &) = default;
+  single_problem &operator=(single_problem &&) = default;
+  single_problem(const problem_info<T> &_problem_data)
+      : problem_data_(_problem_data) {}
+  single_problem(problem_info<T> &&_problem_data)
+      : problem_data_(std::move(_problem_data)) {}
+};
+namespace detail {
+
+template <typename F>
+concept single_problem_requires =
+    requires(F &&f, std::span<const typename F::value_type> x) {
+      requires std::is_floating_point_v<typename F::value_type>;
+      {
+        f.problem_information()
+      } -> std::same_as<problem_info<typename F::value_type>>;
+      F(std::move(f));
+      { f(x) } -> std::same_as<typename F::value_type>;
+    };
+
+template <typename F>
+  requires single_problem_requires<F>
+class single_problem_wrapper : public single_problem<typename F::value_type> {
+  F f;
+
+public:
+  using problem_type = F;
+  using value_type = typename F::value_type;
+  single_problem_wrapper(const single_problem_wrapper &) = default;
+  single_problem_wrapper(single_problem_wrapper &&) = default;
+  single_problem_wrapper &operator=(const single_problem_wrapper &) = default;
+  single_problem_wrapper &operator=(single_problem_wrapper &&) = default;
+  single_problem_wrapper(F &&_f)
+      : single_problem<value_type>(_f.problem_information()), f(std::move(_f)) {
+  }
+  value_type operator()(std::span<const value_type> x) override { return f(x); }
+};
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T, int I = 1, int S = 0>
+inline constexpr auto get_problem_size() noexcept {
+  if constexpr (single_problem_requires<Problem<I, Dim, T>>) {
+    return get_problem_size<Problem, Dim, T, I + 1, S + 1>();
+  } else {
+    return S;
+  }
+}
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T, typename Arg, int I, int L>
+  requires(L > 0) && requires(Arg arg) { Problem<I, Dim, T>(arg); }
+inline auto generate_problem_factory(auto &v) noexcept {
+  if constexpr (I <= L) {
+    v.emplace_back([](Arg arg) {
+      return std::unique_ptr<single_problem<T>>(
+          std::make_unique<single_problem_wrapper<Problem<I, Dim, T>>>(
+              Problem<I, Dim, T>(arg)));
+    });
+    if constexpr (I <= L - 1)
+      generate_problem_factory<Problem, Dim, T, Arg, I + 1, L>(v);
+  }
+}
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T, typename Arg>
+inline auto generate_problem_factory() noexcept {
+  constexpr auto size = get_problem_size<Problem, Dim, T>();
+  std::vector<std::unique_ptr<single_problem<T>> (*)(Arg)> v;
+  v.reserve(size);
+  generate_problem_factory<Problem, Dim, T, Arg, 1,
+                           get_problem_size<Problem, Dim, T>()>(v);
+  return v;
+}
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T>
+  requires(get_problem_size<Problem, Dim, T>() > 0)
+inline auto filter_problem_indexs(std::vector<int> v) noexcept {
+  constexpr auto size = get_problem_size<Problem, Dim, T>();
+  if (!v.empty()) {
+    for (auto &x : v)
+      x = std::clamp(x, 1, size);
+    std::sort(v.begin(), v.end());
+    auto last = std::unique(v.begin(), v.end());
+    v.erase(last, v.end());
+  }
+  return v;
+}
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T, typename Arg>
+  requires requires { generate_problem_factory<Problem, Dim, T, Arg>(); }
+inline auto create_problems(std::vector<int> arg1, Arg arg2) noexcept {
+  std::vector<std::unique_ptr<single_problem<T>>> result;
+  auto table = generate_problem_factory<Problem, Dim, T, Arg>();
+  auto v = filter_problem_indexs<Problem, Dim, T>(arg1);
+  if constexpr (std::is_same_v<Arg, int>) {
+    arg2 = std::max(1, arg2);
+  };
+  if (!v.empty()) {
+    if constexpr (!std::is_same_v<Arg, int>) {
+      result.reserve(v.size());
+    } else {
+      result.reserve(arg2 * v.size());
+    }
+    for (auto index : v) {
+      if constexpr (!std::is_same_v<Arg, int>) {
+        result.emplace_back(table[index - 1](arg2));
+      } else {
+        for (int i = 1; i <= arg2; i++)
+          result.emplace_back(table[index - 1](i));
+      }
+    }
+  }
+  return result;
+}
+
+} // namespace detail
+
+} // namespace sevobench::problem
+
+/*** End of inlined file: problem.hpp ***/
+
+namespace sevobench::problem {
+
+template <template <int, int, typename> class Problem, int Dim,
+          std::floating_point T>
+class suite {
+private:
+  std::vector<std::unique_ptr<single_problem<T>>> problems;
+  std::vector<int> prob_ids;
+  int ins_count = 0;
+
+public:
+  using value_type = T;
+  static constexpr auto dim() { return Dim; }
+  auto begin() const { return problems.begin(); }
+  auto end() const { return problems.end(); }
+  auto size() const { return static_cast<int>(problems.size()); }
+  auto instance_count() const { return ins_count; }
+  auto problem_index() const { return prob_ids; }
+  template <typename Arg>
+  suite(std::vector<int> arg1, Arg arg2)
+      : problems(detail::create_problems<Problem, Dim, T>(arg1, arg2)),
+        prob_ids(detail::filter_problem_indexs<Problem, Dim, T>(arg1)),
+        ins_count([&] {
+          if constexpr (std::is_same_v<Arg, int>) {
+            return std::max(arg2, 1);
+          } else
+            return 1;
+        }()) {}
+};
+
+namespace detail {
+struct suite_args {
+  std::vector<int> arg1;
+  std::string dir_name;
+  int ins_count;
+};
+} // namespace detail
+
+template <template <int, int, typename> class Problem, int Dim = 0,
+          std::floating_point T = float, bool B2 = false, bool B3 = true,
+          bool B4 = false, bool B5 = false, bool B6 = false>
+class suite_builder {
+  detail::suite_args args;
+
+public:
+  suite_builder(const detail::suite_args &_args) : args(_args) {}
+  suite_builder(detail::suite_args &&_args) : args(std::move(_args)) {}
+  suite_builder() = default;
+  template <int N> auto dim() {
+    return suite_builder<Problem, N, T, true, B3, B4, B5, B6>(std::move(args));
+  }
+  template <std::floating_point T1> auto type() {
+    return suite_builder<Problem, Dim, T1, B2, true, B4, B5, B6>(
+        std::move(args));
+  }
+  auto dir(std::string dir) {
+    args.dir_name = std::move(dir);
+    return suite_builder<Problem, Dim, T, B2, B3, B4, true, false>(
+        std::move(args));
+  }
+  auto instance_count(int count) {
+    args.ins_count = count;
+    return suite_builder<Problem, Dim, T, B2, B3, B4, false, true>(
+        std::move(args));
+  }
+  auto problem_index(std::vector<int> prob_ids) {
+    args.arg1 = std::move(prob_ids);
+    return suite_builder<Problem, Dim, T, B2, B3, true, B5, B6>(
+        std::move(args));
+  }
+  auto build() {
+    static_assert(B2, "NO SET DIM");
+    static_assert(B3, "NO SET TYPE");
+    static_assert(B4, "NO SET PROBLEM INDEXS");
+    static_assert(B5 || B6, "NO SET INSTANCE COUNT/DIR");
+    if constexpr (B5) {
+      return suite<Problem, Dim, T>(std::move(args.arg1),
+                                    std::move(args.dir_name));
+    } else {
+      return suite<Problem, Dim, T>(std::move(args.arg1), args.ins_count);
+    }
+  }
+};
+} // namespace sevobench::problem
+
+/*** End of inlined file: suite.hpp ***/
+
+
+/*** Start of inlined file: cec2017.hpp ***/
+#pragma once
+
+
+/*** Start of inlined file: cec_problem.hpp ***/
+#pragma once
+
+
+
+
+#include <fstream>
+#include <sstream>
+namespace sevobench::problem {
+
+namespace cec_detail {
+
+template <std::size_t N, bool only_shift = false, std::floating_point T>
+inline void sr_func(std::span<const T> x, std::span<T, N> y,
+                    std::span<const T> o, std::span<const T> m) noexcept {
+  if constexpr (only_shift) {
+    for (std::size_t i = 0; i < N; i++)
+      y[i] = x[i] - o[i];
+  } else {
+    std::array<T, N> tmp;
+    for (std::size_t i = 0; i < N; i++)
+      tmp[i] = x[i] - o[i];
+    for (std::size_t i = 0; i < N; i++)
+      y[i] = std::inner_product(tmp.data(), tmp.data() + N, m.data() + i * N,
+                                T(0));
+  }
+}
+
+template <int N, int Num, std::floating_point T>
+inline auto cf_cal(std::span<const T> x, std::span<const T> o,
+                   std::span<const T, Num> fit,
+                   std::span<const T, Num> delta) noexcept {
+  std::array<T, Num> w{};
+  for (int i = 0; i < Num; i++) {
+    for (int j = 0; j < N; j++)
+      w[i] += tool::Pow<2>(x[j] - o[i * N + j]);
+  }
+  auto it = std::find(w.begin(), w.end(), T(0));
+  if (it != w.end()) {
+    return fit[it - w.begin()];
+  }
+  for (int i = 0; i < Num; i++)
+    w[i] = std::exp(-w[i] / (2 * N * tool::Pow<2>(delta[i]))) / std::sqrt(w[i]);
+  auto w_sum = std::accumulate(w.begin(), w.end(), T(0));
+  return std::inner_product(w.begin(), w.end(), fit.begin(), T(0)) / w_sum;
+}
+
+template <int Dim, typename T>
+inline auto read_cec_data(const std::string &file_name) noexcept {
+  std::vector<T> result(Dim);
+  std::ifstream is(file_name);
+  for (int i = 0; i < Dim; i++) {
+    is >> result[i];
+  }
+  return result;
+}
+
+template <int Dim, std::floating_point T, std::size_t M, typename F>
+  requires(Dim > 0) && (Dim % 10 == 0)
+inline auto calculate_hybrid(std::span<T, Dim> y,
+                             const std::array<std::pair<int, int>, M> &ratios,
+                             const std::array<F, M> &functions) noexcept {
+  T sum(0);
+  int offset = 0;
+  for (std::size_t i = 0; i < M; i++) {
+    auto [u, v] = ratios[i];
+    auto dim = (u * Dim) / v;
+    sum += functions[i](y.subspan(offset, dim));
+    offset += dim;
+  }
+  return sum;
+}
+
+template <int Dim, bool b = false, std::floating_point T, std::size_t M,
+          typename G>
+inline auto calculate_composition(
+    std::span<const T> x, const std::array<T, M> &deltas,
+    const std::array<T, M> &lams, const std::array<T, M> &biases,
+    const std::array<G, M> &functions, std::span<const T> shift,
+    std::span<const T> rotate, std::span<const int> shuffle) noexcept {
+  std::array<T, M> fits;
+  std::array<T, Dim> y;
+  for (size_t i = 0; i < M; i++) {
+    sr_func<Dim, false, T>(x, y, shift.subspan(i * Dim),
+                           rotate.subspan(i * Dim * Dim));
+    if constexpr (b) {
+      std::array<T, Dim> z = y;
+      for (int j = 0; j < Dim; j++)
+        y[j] = z[shuffle[i * Dim + j]];
+    }
+    fits[i] = lams[i] * functions[i](y) + biases[i];
+  }
+  return cf_cal<Dim, M, T>(x, shift, fits, deltas);
+}
+} // namespace cec_detail
+
+template <int Index, int Dim, std::floating_point T,
+          template <int, int, std::floating_point> class Drived>
+class cec_common : public problem_common<Index, Dim, T> {
+protected:
+  std::vector<T> shift;
+  std::vector<T> matrix;
+  std::vector<int> shuffle;
+  int ins = 0;
+  void load_rotate_matrix(const std::string &dir_name, int idx) {
+    std::ostringstream os;
+    os << dir_name << '/' << "M_" << idx << "_D" << Dim << ".txt";
+    if constexpr (is_composition_problem()) {
+      matrix =
+          cec_detail::read_cec_data<Dim * Dim * Drived<Index, Dim, T>::cf_num(),
+                                    T>(os.str());
+    } else {
+      matrix = cec_detail::read_cec_data<Dim * Dim, T>(os.str());
+    }
+  }
+  void load_shift_shuffle(const std::string &dir_name, int idx) {
+    {
+      std::ostringstream os;
+      os << dir_name << '/' << "shift_data_" << idx << ".txt";
+      if constexpr (is_composition_problem()) {
+        shift.reserve(Dim * Drived<Index, Dim, T>::cf_num());
+        std::ifstream ifs(os.str());
+        std::string line;
+        for (int _ = 0; _ < Drived<Index, Dim, T>::cf_num(); _++) {
+          std::getline(ifs, line);
+          std::istringstream iss(line);
+          for (int i = 0; i < Dim; i++) {
+            T tmp;
+            iss >> tmp;
+            shift.push_back(tmp);
+          }
+        }
+      } else {
+        shift = cec_detail::read_cec_data<Dim, T>(os.str());
+      }
+    }
+    if constexpr (is_hybrid_problem() || (requires {
+                    requires Drived<Index, Dim, T>::is_hybrid_composition();
+                  })) {
+      constexpr auto num = [] {
+        if constexpr (is_composition_problem())
+          return Drived<Index, Dim, T>::cf_num();
+        else
+          return 1;
+      }();
+      std::ostringstream os;
+      os << dir_name << '/' << "shuffle_data_" << idx << "_D" << Dim << ".txt";
+      shuffle = cec_detail::read_cec_data<num * Dim, int>(os.str());
+      for (auto &x : shuffle)
+        --x;
+    }
+  }
+  cec_common(const std::string &dir_name, int idx) {
+    load_shift_shuffle(dir_name, idx);
+    load_rotate_matrix(dir_name, idx);
+    ins = 1;
+  }
+
+public:
+  cec_common() = default;
+  cec_common(cec_common &&) = default;
+  cec_common(const cec_common &) = default;
+  cec_common &operator=(cec_common &&) = default;
+  cec_common &operator=(const cec_common &) = default;
+  cec_common(int _ins) : ins(_ins) {
+    std::default_random_engine gen(std::random_device{}());
+    std::uniform_real_distribution<T> o1(lower_bound(), upper_bound());
+    constexpr auto num = [] {
+      if constexpr (is_composition_problem())
+        return Drived<Index, Dim, T>::cf_num();
+      else
+        return 1;
+    }();
+    shift.resize(num * Dim);
+    std::generate_n(shift.begin(), num * Dim, [&] { return o1(gen); });
+    if constexpr (!is_only_shift()) {
+      matrix.resize(Dim * Dim * num);
+      for (int i = 0; i < num; i++) {
+        tool::generate_rotate_vector<Dim, T>(
+            std::span<T>(matrix.data() + i * Dim * Dim, Dim * Dim));
+      }
+    }
+    if constexpr (is_hybrid_problem() || (requires {
+                    requires Drived<Index, Dim, T>::is_hybrid_composition();
+                  })) {
+      shuffle.resize(num * Dim);
+      std::default_random_engine gen1(std::random_device{}());
+      for (int i = 0; i < num; i++) {
+        std::iota(shuffle.data() + i * Dim, shuffle.data() + (i + 1) * Dim,
+                  int(0));
+        std::shuffle(shuffle.data() + i * Dim, shuffle.data() + (i + 1) * Dim,
+                     gen1);
+      }
+    }
+  }
+  cec_common(const std::string &dir_name) {
+    load_shift_shuffle(dir_name, Index);
+    load_rotate_matrix(dir_name, Index);
+    ins = 1;
+  }
+  constexpr static auto lower_bound() { return T(-100); }
+  constexpr static auto upper_bound() { return T(100); }
+  auto instance() const noexcept { return ins; }
+  void set_instance(int _ins) noexcept { ins = _ins; }
+  static constexpr auto has_basic_func() {
+    return requires(std::span<T, Dim> x) {
+      { Drived<Index, Dim, T>::evaluate(x) } -> std::same_as<T>;
+    } || requires { requires Drived<Index, Dim, T>::is_basic(); };
+  }
+  static constexpr auto has_hybrid_func() {
+    return requires(std::span<T, Dim> x) {
+      { Drived<Index, Dim, T>::hybrid_evaluate(x) } -> std::same_as<T>;
+    } || requires { requires Drived<Index, Dim, T>::is_hybrid(); };
+  }
+  static constexpr auto has_composition_func() {
+    return requires(std::span<const T> x, std::span<const int> y) {
+      {
+        Drived<Index, Dim, T>::composition_evaluate(x, x, x, y)
+      } -> std::same_as<T>;
+      { Drived<Index, Dim, T>::cf_num() } -> std::same_as<int>;
+      requires Drived<Index, Dim, T>::cf_num() > 1;
+    } || requires { requires Drived<Index, Dim, T>::is_composition(); };
+  }
+  static constexpr auto is_basic_problem() {
+    return (has_basic_func()) && (!has_hybrid_func()) &&
+           (!has_composition_func());
+  }
+  static constexpr auto is_hybrid_problem() {
+    return (!has_basic_func()) && (has_hybrid_func()) &&
+           (!has_composition_func());
+  }
+  static constexpr auto is_composition_problem() {
+    return (!has_basic_func()) && (!has_hybrid_func()) &&
+           (has_composition_func());
+  }
+  static constexpr auto is_only_shift() {
+    return is_basic_problem() &&
+           requires { requires Drived<Index, Dim, T>::is_only_shift(); };
+  }
+  auto self() const noexcept {
+    static_assert(std::is_base_of_v<cec_common<Index, Dim, T, Drived>,
+                                    Drived<Index, Dim, T>>,
+                  "CRTP FAILED");
+    return static_cast<Drived<Index, Dim, T> *>(this);
+  }
+
+  static constexpr auto optimum_num() noexcept {
+    if constexpr (requires {
+                    { Drived<Index, Dim, T>::optimum_num() } -> std::same_as<T>;
+                  }) {
+      return Drived<Index, Dim, T>::optimum_num();
+    } else {
+      return T(100 * Index);
+    }
+  }
+
+  auto optimum_solution() const noexcept {
+    solution<T> x(shift.data(), shift.data() + Dim);
+    x.set_fitness(optimum_num());
+    return x;
+  }
+  auto problem_information() const noexcept {
+    return problem_info<T>{.index = this->index(),
+                           .instance = ins,
+                           .dim = this->dim(),
+                           .lb = lower_bound(),
+                           .ub = upper_bound(),
+                           .optimum = optimum_solution()};
+  }
+  auto operator()(std::span<const T> x) const noexcept {
+    static_assert(is_composition_problem() || is_hybrid_problem() ||
+                      is_basic_problem(),
+                  "CRTP FAILED");
+    if constexpr (!is_composition_problem()) {
+      std::array<T, Dim> y;
+      cec_detail::sr_func<Dim, is_only_shift(), T>(x, y, shift, matrix);
+      if constexpr (is_hybrid_problem()) {
+        std::array<T, Dim> z;
+        for (int i = 0; i < Dim; i++)
+          z[i] = y[shuffle[i]];
+        return Drived<Index, Dim, T>::hybrid_evaluate(z) + optimum_num();
+      } else {
+        return Drived<Index, Dim, T>::evaluate(y) + optimum_num();
+      }
+    } else {
+      return Drived<Index, Dim, T>::composition_evaluate(x, shift, matrix,
+                                                         shuffle) +
+             optimum_num();
+    }
+  }
+};
+
+} // namespace sevobench::problem
+
+/*** End of inlined file: cec_problem.hpp ***/
+
+namespace sevobench::problem {
+template <int Prob_Index, int Dim, std::floating_point T> class cec2017;
+
+template <int Dim, std::floating_point T>
+class cec2017<1, Dim, T> : public cec_common<1, Dim, T, cec2017> {
+public:
+  using cec_common<1, Dim, T, cec2017>::cec_common;
+  static auto evaluate(std::span<T, Dim> x) {
+    return cec_detail::bent_cigar_func(x);
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<2, Dim, T> : public cec_common<2, Dim, T, cec2017> {
+public:
+  using cec_common<2, Dim, T, cec2017>::cec_common;
+  static auto evaluate(std::span<T, Dim> x) {
+    return cec_detail::sum_diff_pow_func(x);
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<3, Dim, T> : public cec_common<3, Dim, T, cec2017> {
+public:
+  using cec_common<3, Dim, T, cec2017>::cec_common;
+  static auto evaluate(std::span<T, Dim> x) {
+    return cec_detail::zakharov_func(x);
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<4, Dim, T> : public cec_common<4, Dim, T, cec2017> {
+public:
+  using cec_common<4, Dim, T, cec2017>::cec_common;
+  static auto evaluate(std::span<T, Dim> x) {
+    return cec_detail::rosenbrock_func(x);
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<5, Dim, T> : public cec_common<5, Dim, T, cec2017> {
+public:
+  using cec_common<5, Dim, T, cec2017>::cec_common;
+  static auto evaluate(std::span<T, Dim> x) {
+    return cec_detail::rastrigin_func(x);
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<6, Dim, T> : public cec_common<6, Dim, T, cec2017> {
+public:
+  using cec_common<6, Dim, T, cec2017>::cec_common;
+  static auto evaluate(std::span<T, Dim> x) {
+    return cec_detail::schwefel_F7_func(x);
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<7, Dim, T> : public cec_common<7, Dim, T, cec2017> {
+public:
+  using cec_common<7, Dim, T, cec2017>::cec_common;
+  auto operator()(std::span<const T> x) const {
+    return cec_detail::bi_rastrigin_func<Dim, T>(x, this->shift, this->matrix) +
+           +this->optimum_num();
+  }
+  static constexpr auto is_basic() { return true; }
+};
+template <int Dim, std::floating_point T>
+class cec2017<8, Dim, T> : public cec_common<8, Dim, T, cec2017> {
+public:
+  using cec_common<8, Dim, T, cec2017>::cec_common;
+  auto operator()(std::span<const T> x) const {
+    std::array<T, Dim> y;
+    std::array<T, Dim> z;
+    for (int i = 0; i < Dim; i++) {
+      y[i] = x[i];
+      if (std::abs(y[i] - this->shift[i]) > T(0.5))
+        y[i] = this->shift[i] +
+               std::floor(2 * (y[i] - this->shift[i]) + T(0.5)) * T(0.5);
+    }
+    cec_detail::sr_func<Dim, false, T>(y, z, this->shift, this->matrix);
+    return cec_detail::rastrigin_func<T, Dim>(z) + this->optimum_num();
+  }
+  static constexpr auto is_basic() { return true; }
+};
+template <int Dim, std::floating_point T>
+class cec2017<9, Dim, T> : public cec_common<9, Dim, T, cec2017> {
+public:
+  using cec_common<9, Dim, T, cec2017>::cec_common;
+  static auto evaluate(std::span<T, Dim> x) { return cec_detail::levy_func(x); }
+};
+template <int Dim, std::floating_point T>
+class cec2017<10, Dim, T> : public cec_common<10, Dim, T, cec2017> {
+public:
+  using cec_common<10, Dim, T, cec2017>::cec_common;
+  static auto evaluate(std::span<T, Dim> x) {
+    return cec_detail::schwefel_func(x);
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<11, Dim, T> : public cec_common<11, Dim, T, cec2017> {
+public:
+  using cec_common<11, Dim, T, cec2017>::cec_common;
+  static auto hybrid_evaluate(std::span<T, Dim> x) {
+    return cec_detail::calculate_hybrid<Dim>(
+        x, std::to_array<std::pair<int, int>>({{1, 5}, {2, 5}, {2, 5}}),
+        std::to_array({cec_detail::zakharov_func<T>,
+                       cec_detail::rosenbrock_func<T>,
+                       cec_detail::rastrigin_func<T>}));
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<12, Dim, T> : public cec_common<12, Dim, T, cec2017> {
+public:
+  using cec_common<12, Dim, T, cec2017>::cec_common;
+  static auto hybrid_evaluate(std::span<T, Dim> x) {
+    return cec_detail::calculate_hybrid<Dim>(
+        x, std::to_array<std::pair<int, int>>({{3, 10}, {3, 10}, {2, 5}}),
+        std::to_array({cec_detail::ellips_func<T>, cec_detail::schwefel_func<T>,
+                       cec_detail::bent_cigar_func<T>}));
+  }
+};
+
+template <int Dim, std::floating_point T>
+class cec2017<13, Dim, T> : public cec_common<13, Dim, T, cec2017> {
+public:
+  using cec_common<13, Dim, T, cec2017>::cec_common;
+  auto operator()(std::span<const T> x) const {
+    std::array<T, Dim> y;
+    cec_detail::sr_func<Dim, false, T>(x, y, this->shift, this->matrix);
+    std::array<T, Dim> z;
+    for (int i = 0; i < Dim; i++)
+      z[i] = y[this->shuffle[i]];
+    for (int i = 3 * Dim / 5; i < Dim; i++) {
+      z[i] = T(0.2) * T(this->shift[this->shuffle[i]] > 0 ? 1 : -1) * z[i];
+    }
+    return cec_detail::calculate_hybrid<Dim, T>(
+               z,
+               std::to_array<std::pair<int, int>>({{3, 10}, {3, 10}, {2, 5}}),
+               std::to_array({cec_detail::bent_cigar_func<T>,
+                              cec_detail::rosenbrock_func<T>,
+                              cec_detail::bi_rastrigin_func<T>})) +
+           T(1300);
+  }
+  static constexpr auto is_hybrid() { return true; }
+};
+
+template <int Dim, std::floating_point T>
+class cec2017<14, Dim, T> : public cec_common<14, Dim, T, cec2017> {
+public:
+  using cec_common<14, Dim, T, cec2017>::cec_common;
+  static auto hybrid_evaluate(std::span<T, Dim> x) {
+    return cec_detail::calculate_hybrid<Dim>(
+        x, std::to_array<std::pair<int, int>>({{1, 5}, {1, 5}, {1, 5}, {2, 5}}),
+        std::to_array({cec_detail::ellips_func<T>, cec_detail::ackley_func<T>,
+                       cec_detail::schwefel_F7_func<T>,
+                       cec_detail::rastrigin_func<T>}));
+  }
+};
+
+template <int Dim, std::floating_point T>
+class cec2017<15, Dim, T> : public cec_common<15, Dim, T, cec2017> {
+public:
+  using cec_common<15, Dim, T, cec2017>::cec_common;
+  static auto hybrid_evaluate(std::span<T, Dim> x) {
+    return cec_detail::calculate_hybrid<Dim>(
+        x,
+        std::to_array<std::pair<int, int>>({{1, 5}, {1, 5}, {3, 10}, {3, 10}}),
+        std::to_array({cec_detail::bent_cigar_func<T>,
+                       cec_detail::hgbat_func<T>, cec_detail::rastrigin_func<T>,
+                       cec_detail::rosenbrock_func<T>}));
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<16, Dim, T> : public cec_common<16, Dim, T, cec2017> {
+public:
+  using cec_common<16, Dim, T, cec2017>::cec_common;
+  static auto hybrid_evaluate(std::span<T, Dim> x) {
+    return cec_detail::calculate_hybrid<Dim>(
+        x,
+        std::to_array<std::pair<int, int>>({{1, 5}, {1, 5}, {3, 10}, {3, 10}}),
+        std::to_array({cec_detail::escaffer6_func<T>, cec_detail::hgbat_func<T>,
+                       cec_detail::rosenbrock_func<T>,
+                       cec_detail::schwefel_func<T>}));
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<17, Dim, T> : public cec_common<17, Dim, T, cec2017> {
+public:
+  using cec_common<17, Dim, T, cec2017>::cec_common;
+  static auto hybrid_evaluate(std::span<T, Dim> x) {
+    return cec_detail::calculate_hybrid<Dim>(
+        x,
+        std::to_array<std::pair<int, int>>(
+            {{1, 10}, {1, 5}, {1, 5}, {1, 5}, {3, 10}}),
+        std::to_array({cec_detail::katsuura_func<T>, cec_detail::ackley_func<T>,
+                       cec_detail::grie_rosen_func<T>,
+                       cec_detail::schwefel_func<T>,
+                       cec_detail::rastrigin_func<T>}));
+  }
+};
+
+template <int Dim, std::floating_point T>
+class cec2017<18, Dim, T> : public cec_common<18, Dim, T, cec2017> {
+public:
+  using cec_common<18, Dim, T, cec2017>::cec_common;
+  static auto hybrid_evaluate(std::span<T, Dim> x) {
+    return cec_detail::calculate_hybrid<Dim>(
+        x,
+        std::to_array<std::pair<int, int>>(
+            {{1, 5}, {1, 5}, {1, 5}, {1, 5}, {1, 5}}),
+        std::to_array({cec_detail::ellips_func<T>, cec_detail::ackley_func<T>,
+                       cec_detail::rastrigin_func<T>, cec_detail::hgbat_func<T>,
+                       cec_detail::discus_func<T>}));
+  }
+};
+
+template <int Dim, std::floating_point T>
+class cec2017<19, Dim, T> : public cec_common<19, Dim, T, cec2017> {
+public:
+  using cec_common<19, Dim, T, cec2017>::cec_common;
+  static auto hybrid_evaluate(std::span<T, Dim> x) {
+    return cec_detail::calculate_hybrid<Dim>(
+        x,
+        std::to_array<std::pair<int, int>>(
+            {{1, 5}, {1, 5}, {1, 5}, {1, 5}, {1, 5}}),
+        std::to_array(
+            {cec_detail::bent_cigar_func<T>, cec_detail::rastrigin_func<T>,
+             cec_detail::grie_rosen_func<T>, cec_detail::weierstrass_func<T>,
+             cec_detail::escaffer6_func<T>}));
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<20, Dim, T> : public cec_common<20, Dim, T, cec2017> {
+public:
+  using cec_common<20, Dim, T, cec2017>::cec_common;
+  static auto hybrid_evaluate(std::span<T, Dim> x) {
+    return cec_detail::calculate_hybrid<Dim>(
+        x,
+        std::to_array<std::pair<int, int>>(
+            {{1, 10}, {1, 10}, {1, 5}, {1, 5}, {1, 5}, {1, 5}}),
+        std::to_array(
+            {cec_detail::hgbat_func<T>, cec_detail::katsuura_func<T>,
+             cec_detail::ackley_func<T>, cec_detail::rastrigin_func<T>,
+             cec_detail::schwefel_func<T>, cec_detail::schwefel_F7_func<T>}));
+  }
+};
+template <int Dim, std::floating_point T>
+class cec2017<21, Dim, T> : public cec_common<21, Dim, T, cec2017> {
+public:
+  using cec_common<21, Dim, T, cec2017>::cec_common;
+  static auto composition_evaluate(std::span<const T> x, std::span<const T> y,
+                                   std::span<const T> z,
+                                   std::span<const int> s) {
+    return cec_detail::calculate_composition<Dim, false>(
+        x, std::to_array<T>({10, 20, 30}), std::to_array<T>({1, 1e-6, 1}),
+        std::to_array<T>({0, 100, 200}),
+        std::to_array({cec_detail::rosenbrock_func<T, Dim>,
+                       cec_detail::ellips_func<T, Dim>,
+                       cec_detail::rastrigin_func<T, Dim>}),
+        y, z, s);
+  }
+  static constexpr auto cf_num() { return 3; }
+};
+template <int Dim, std::floating_point T>
+class cec2017<22, Dim, T> : public cec_common<22, Dim, T, cec2017> {
+public:
+  using cec_common<22, Dim, T, cec2017>::cec_common;
+  static auto composition_evaluate(std::span<const T> x, std::span<const T> y,
+                                   std::span<const T> z,
+                                   std::span<const int> s) {
+    return cec_detail::calculate_composition<Dim, false>(
+        x, std::to_array<T>({10, 20, 30}), std::to_array<T>({1, 10, 1}),
+        std::to_array<T>({0, 100, 200}),
+        std::to_array({cec_detail::rastrigin_func<T, Dim>,
+                       cec_detail::griewank_func<T, Dim>,
+                       cec_detail::schwefel_func<T, Dim>}),
+        y, z, s);
+  }
+  static constexpr auto cf_num() { return 3; }
+};
+template <int Dim, std::floating_point T>
+class cec2017<23, Dim, T> : public cec_common<23, Dim, T, cec2017> {
+public:
+  using cec_common<23, Dim, T, cec2017>::cec_common;
+  static auto composition_evaluate(std::span<const T> x, std::span<const T> y,
+                                   std::span<const T> z,
+                                   std::span<const int> s) {
+    return cec_detail::calculate_composition<Dim, false>(
+        x, std::to_array<T>({10, 20, 30, 40}), std::to_array<T>({1, 10, 1, 1}),
+        std::to_array<T>({0, 100, 200, 300}),
+        std::to_array({cec_detail::rosenbrock_func<T, Dim>,
+                       cec_detail::ackley_func<T, Dim>,
+                       cec_detail::schwefel_func<T, Dim>,
+                       cec_detail::rastrigin_func<T, Dim>}),
+        y, z, s);
+  }
+  static constexpr auto cf_num() { return 4; }
+};
+template <int Dim, std::floating_point T>
+class cec2017<24, Dim, T> : public cec_common<24, Dim, T, cec2017> {
+public:
+  using cec_common<24, Dim, T, cec2017>::cec_common;
+  static auto composition_evaluate(std::span<const T> x, std::span<const T> y,
+                                   std::span<const T> z,
+                                   std::span<const int> s) {
+    return cec_detail::calculate_composition<Dim, false>(
+        x, std::to_array<T>({10, 20, 30, 40}),
+        std::to_array<T>({10, 1e-6, 10, 1}),
+        std::to_array<T>({0, 100, 200, 300}),
+        std::to_array({cec_detail::ackley_func<T, Dim>,
+                       cec_detail::ellips_func<T, Dim>,
+                       cec_detail::griewank_func<T, Dim>,
+                       cec_detail::rastrigin_func<T, Dim>}),
+        y, z, s);
+  }
+  static constexpr auto cf_num() { return 4; }
+};
+template <int Dim, std::floating_point T>
+class cec2017<25, Dim, T> : public cec_common<25, Dim, T, cec2017> {
+public:
+  using cec_common<25, Dim, T, cec2017>::cec_common;
+  static auto composition_evaluate(std::span<const T> x, std::span<const T> y,
+                                   std::span<const T> z,
+                                   std::span<const int> s) {
+    return cec_detail::calculate_composition<Dim, false>(
+        x, std::to_array<T>({10, 20, 30, 40, 50}),
+        std::to_array<T>({10, 1, 10, 1e-6, 1}),
+        std::to_array<T>({0, 100, 200, 300, 400}),
+        std::to_array({cec_detail::rastrigin_func<T, Dim>,
+                       cec_detail::happycat_func<T, Dim>,
+                       cec_detail::ackley_func<T, Dim>,
+                       cec_detail::discus_func<T, Dim>,
+                       cec_detail::rosenbrock_func<T, Dim>}),
+        y, z, s);
+  }
+  static constexpr auto cf_num() { return 5; }
+};
+template <int Dim, std::floating_point T>
+class cec2017<26, Dim, T> : public cec_common<26, Dim, T, cec2017> {
+public:
+  using cec_common<26, Dim, T, cec2017>::cec_common;
+  static auto composition_evaluate(std::span<const T> x, std::span<const T> y,
+                                   std::span<const T> z,
+                                   std::span<const int> s) {
+    return cec_detail::calculate_composition<Dim, false>(
+        x, std::to_array<T>({10, 20, 20, 30, 40}),
+        std::to_array<T>({5e-4, 1, 10, 1, 10}),
+        std::to_array<T>({0, 100, 200, 300, 400}),
+        std::to_array({cec_detail::escaffer6_func<T, Dim>,
+                       cec_detail::schwefel_func<T, Dim>,
+                       cec_detail::griewank_func<T, Dim>,
+                       cec_detail::rosenbrock_func<T, Dim>,
+                       cec_detail::rastrigin_func<T, Dim>}),
+        y, z, s);
+  }
+  static constexpr auto cf_num() { return 5; }
+};
+template <int Dim, std::floating_point T>
+class cec2017<27, Dim, T> : public cec_common<27, Dim, T, cec2017> {
+public:
+  using cec_common<27, Dim, T, cec2017>::cec_common;
+  static auto composition_evaluate(std::span<const T> x, std::span<const T> y,
+                                   std::span<const T> z,
+                                   std::span<const int> s) {
+    return cec_detail::calculate_composition<Dim, false>(
+        x, std::to_array<T>({10, 20, 30, 40, 50, 60}),
+        std::to_array<T>({10, 10, 2.5, 1e-26, 1e-6, 5e-4}),
+        std::to_array<T>({0, 100, 200, 300, 400, 500}),
+        std::to_array({cec_detail::hgbat_func<T, Dim>,
+                       cec_detail::rastrigin_func<T, Dim>,
+                       cec_detail::schwefel_func<T, Dim>,
+                       cec_detail::bent_cigar_func<T, Dim>,
+                       cec_detail::ellips_func<T, Dim>,
+                       cec_detail::escaffer6_func<T, Dim>}),
+        y, z, s);
+  }
+  static constexpr auto cf_num() { return 6; }
+};
+template <int Dim, std::floating_point T>
+class cec2017<28, Dim, T> : public cec_common<28, Dim, T, cec2017> {
+public:
+  using cec_common<28, Dim, T, cec2017>::cec_common;
+  static auto composition_evaluate(std::span<const T> x, std::span<const T> y,
+                                   std::span<const T> z,
+                                   std::span<const int> s) {
+    return cec_detail::calculate_composition<Dim, false>(
+        x, std::to_array<T>({10, 20, 30, 40, 50, 60}),
+        std::to_array<T>({10, 10, 1e-6, 1, 1, 5e-4}),
+        std::to_array<T>({0, 100, 200, 300, 400, 500}),
+        std::to_array({cec_detail::ackley_func<T, Dim>,
+                       cec_detail::griewank_func<T, Dim>,
+                       cec_detail::discus_func<T, Dim>,
+                       cec_detail::rosenbrock_func<T, Dim>,
+                       cec_detail::happycat_func<T, Dim>,
+                       cec_detail::escaffer6_func<T, Dim>}),
+        y, z, s);
+  }
+  static constexpr auto cf_num() { return 6; }
+};
+template <int Dim, std::floating_point T>
+class cec2017<29, Dim, T> : public cec_common<29, Dim, T, cec2017> {
+public:
+  using cec_common<29, Dim, T, cec2017>::cec_common;
+  static auto composition_evaluate(std::span<const T> x, std::span<const T> y,
+                                   std::span<const T> z,
+                                   std::span<const int> s) {
+    return cec_detail::calculate_composition<Dim, true>(
+        x, std::to_array<T>({10, 30, 50}), std::to_array<T>({1, 1, 1}),
+        std::to_array<T>({0, 100, 200}),
+        std::to_array({cec2017<15, Dim, T>::hybrid_evaluate,
+                       cec2017<16, Dim, T>::hybrid_evaluate,
+                       cec2017<17, Dim, T>::hybrid_evaluate}),
+        y, z, s);
+  }
+  static constexpr auto cf_num() { return 3; }
+  static constexpr auto is_hybrid_composition() { return true; }
+};
+template <int Dim, std::floating_point T>
+class cec2017<30, Dim, T> : public cec_common<30, Dim, T, cec2017> {
+public:
+  using cec_common<30, Dim, T, cec2017>::cec_common;
+  static auto composition_evaluate(std::span<const T> x, std::span<const T> y,
+                                   std::span<const T> z,
+                                   std::span<const int> s) {
+    return cec_detail::calculate_composition<Dim, true>(
+        x, std::to_array<T>({10, 30, 50}), std::to_array<T>({1, 1, 1}),
+        std::to_array<T>({0, 100, 200}),
+        std::to_array({cec2017<15, Dim, T>::hybrid_evaluate,
+                       cec2017<18, Dim, T>::hybrid_evaluate,
+                       cec2017<19, Dim, T>::hybrid_evaluate}),
+        y, z, s);
+  }
+  static constexpr auto cf_num() { return 3; }
+  static constexpr auto is_hybrid_composition() { return true; }
+};
+} // namespace sevobench::problem
+
+/*** End of inlined file: cec2017.hpp ***/
+

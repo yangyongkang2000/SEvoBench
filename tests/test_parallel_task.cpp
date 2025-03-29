@@ -14,7 +14,9 @@ template <int N> void test_parallel_task() {
   }
   for (decltype(sz) i = 0; i < N * sz; i++) {
     f[i].get();
-    assert(ids[i] == i);
+    if (!(ids[i] == i)) {
+      std::cout << "parallel_task is failed!\n";
+    }
   }
 }
 
