@@ -104,7 +104,7 @@ struct cec2022<7, Dim, T> : public cec_common<7, Dim, T, cec2022> {
         x,
         std::to_array<std::pair<int, int>>(
             {{1, 10}, {1, 5}, {1, 5}, {1, 5}, {1, 10}, {1, 5}}),
-        std::to_array(
+        std::to_array<T (*)(std::span<T>)>(
             {cec_detail::hgbat_func<T>, cec_detail::katsuura_func<T>,
              cec_detail::ackley_func<T>, cec_detail::rastrigin_func<T>,
              cec_detail::schwefel_func<T>, cec_detail::schwefel_F7_func<T>}));
@@ -121,7 +121,7 @@ struct cec2022<9, Dim, T> : public cec_common<9, Dim, T, cec2022> {
     constexpr auto lams = std::to_array<T>({1, 1e-6, 1e-26, 1e-6, 1e-6});
     constexpr auto biases = std::to_array<T>({0, 200, 300, 100, 400});
     constexpr auto deltas = std::to_array<T>({10, 20, 30, 40, 50});
-    constexpr auto f = std::to_array(
+    constexpr auto f = std::to_array<T (*)(std::span<T, Dim>)>(
         {cec_detail::rosenbrock_func<T, Dim>, cec_detail::ellips_func<T, Dim>,
          cec_detail::bent_cigar_func<T, Dim>, cec_detail::discus_func<T, Dim>,
          cec_detail::ellips_func<T, Dim>});
@@ -152,9 +152,9 @@ struct cec2022<10, Dim, T> : public cec_common<10, Dim, T, cec2022> {
     constexpr auto deltas = std::to_array<T>({20, 10, 10});
     constexpr auto lams = std::to_array<T>({1, 1, 1});
     constexpr auto biases = std::to_array<T>({0, 200, 100});
-    constexpr auto f = std::to_array({cec_detail::schwefel_func<T, Dim>,
-                                      cec_detail::rastrigin_func<T, Dim>,
-                                      cec_detail::hgbat_func<T, Dim>});
+    constexpr auto f = std::to_array<T (*)(std::span<T, Dim>)>(
+        {cec_detail::schwefel_func<T, Dim>, cec_detail::rastrigin_func<T, Dim>,
+         cec_detail::hgbat_func<T, Dim>});
     std::array<T, cf_num()> fits;
     std::array<T, Dim> tmp_x;
     for (int i = 0; i < cf_num(); i++) {
@@ -182,11 +182,12 @@ struct cec2022<11, Dim, T> : public cec_common<11, Dim, T, cec2022> {
         x, std::to_array<T>({20, 20, 30, 30, 20}),
         std::to_array<T>({5e-4, 1, 10, 1, 10}),
         std::to_array<T>({0, 200, 300, 400, 200}),
-        std::to_array({cec_detail::escaffer6_func<T, Dim>,
-                       cec_detail::schwefel_func<T, Dim>,
-                       cec_detail::griewank_func<T, Dim>,
-                       cec_detail::rosenbrock_func<T, Dim>,
-                       cec_detail::rastrigin_func<T, Dim>}),
+        std::to_array<T (*)(std::span<T, Dim>)>(
+            {cec_detail::escaffer6_func<T, Dim>,
+             cec_detail::schwefel_func<T, Dim>,
+             cec_detail::griewank_func<T, Dim>,
+             cec_detail::rosenbrock_func<T, Dim>,
+             cec_detail::rastrigin_func<T, Dim>}),
         y, z, s);
   }
   static constexpr auto cf_num() { return 5; }
@@ -203,12 +204,12 @@ struct cec2022<12, Dim, T> : public cec_common<12, Dim, T, cec2022> {
         x, std::to_array<T>({10, 20, 30, 40, 50, 60}),
         std::to_array<T>({10, 10, 2.5, 1e-26, 1e-6, 5e-4}),
         std::to_array<T>({0, 300, 500, 100, 400, 200}),
-        std::to_array({cec_detail::hgbat_func<T, Dim>,
-                       cec_detail::rastrigin_func<T, Dim>,
-                       cec_detail::schwefel_func<T, Dim>,
-                       cec_detail::bent_cigar_func<T, Dim>,
-                       cec_detail::ellips_func<T, Dim>,
-                       cec_detail::escaffer6_func<T, Dim>}),
+        std::to_array<T (*)(std::span<T, Dim>)>(
+            {cec_detail::hgbat_func<T, Dim>, cec_detail::rastrigin_func<T, Dim>,
+             cec_detail::schwefel_func<T, Dim>,
+             cec_detail::bent_cigar_func<T, Dim>,
+             cec_detail::ellips_func<T, Dim>,
+             cec_detail::escaffer6_func<T, Dim>}),
         y, z, s);
   }
   static constexpr auto cf_num() { return 6; }
@@ -220,9 +221,9 @@ struct cec2022<6, Dim, T> : public cec_common<6, Dim, T, cec2022> {
   static auto hybrid_evaluate(std::span<T, Dim> x) {
     return cec_detail::calculate_hybrid<Dim>(
         x, std::to_array<std::pair<int, int>>({{2, 5}, {2, 5}, {1, 5}}),
-        std::to_array({cec_detail::bent_cigar_func<T>,
-                       cec_detail::hgbat_func<T>,
-                       cec_detail::rastrigin_func<T>}));
+        std::to_array<T (*)(std::span<T>)>({cec_detail::bent_cigar_func<T>,
+                                            cec_detail::hgbat_func<T>,
+                                            cec_detail::rastrigin_func<T>}));
   }
   static constexpr auto optimum_num() { return T(1800); }
 };
@@ -234,7 +235,7 @@ struct cec2022<8, Dim, T> : public cec_common<8, Dim, T, cec2022> {
         x,
         std::to_array<std::pair<int, int>>(
             {{3, 10}, {1, 5}, {1, 5}, {1, 10}, {1, 5}}),
-        std::to_array(
+        std::to_array<T (*)(std::span<T>)>(
             {cec_detail::katsuura_func<T>, cec_detail::happycat_func<T>,
              cec_detail::grie_rosen_func<T>, cec_detail::schwefel_func<T>,
              cec_detail::ackley_func<T>}));

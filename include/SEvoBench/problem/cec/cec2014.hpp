@@ -139,9 +139,9 @@ public:
   static auto hybrid_evaluate(std::span<T, Dim> x) {
     return cec_detail::calculate_hybrid<Dim>(
         x, std::to_array<std::pair<int, int>>({{3, 10}, {3, 10}, {2, 5}}),
-        std::to_array({cec_detail::schwefel_func<T>,
-                       cec_detail::rastrigin_func<T>,
-                       cec_detail::ellips_func<T>}));
+        std::to_array<T (*)(std::span<T>)>({cec_detail::schwefel_func<T>,
+                                            cec_detail::rastrigin_func<T>,
+                                            cec_detail::ellips_func<T>}));
   }
 };
 template <int Dim, std::floating_point T>
@@ -151,9 +151,9 @@ public:
   static auto hybrid_evaluate(std::span<T, Dim> x) {
     return cec_detail::calculate_hybrid<Dim>(
         x, std::to_array<std::pair<int, int>>({{3, 10}, {3, 10}, {2, 5}}),
-        std::to_array({cec_detail::bent_cigar_func<T>,
-                       cec_detail::hgbat_func<T>,
-                       cec_detail::rastrigin_func<T>}));
+        std::to_array<T (*)(std::span<T>)>({cec_detail::bent_cigar_func<T>,
+                                            cec_detail::hgbat_func<T>,
+                                            cec_detail::rastrigin_func<T>}));
   }
 };
 template <int Dim, std::floating_point T>
@@ -164,7 +164,7 @@ public:
     return cec_detail::calculate_hybrid<Dim>(
         x,
         std::to_array<std::pair<int, int>>({{1, 5}, {1, 5}, {3, 10}, {3, 10}}),
-        std::to_array(
+        std::to_array<T (*)(std::span<T>)>(
             {cec_detail::griewank_func<T>, cec_detail::weierstrass_func<T>,
              cec_detail::rosenbrock_func<T>, cec_detail::escaffer6_func<T>}));
   }
@@ -177,9 +177,9 @@ public:
     return cec_detail::calculate_hybrid<Dim>(
         x,
         std::to_array<std::pair<int, int>>({{1, 5}, {1, 5}, {3, 10}, {3, 10}}),
-        std::to_array({cec_detail::hgbat_func<T>, cec_detail::discus_func<T>,
-                       cec_detail::grie_rosen_func<T>,
-                       cec_detail::rastrigin_func<T>}));
+        std::to_array<T (*)(std::span<T>)>(
+            {cec_detail::hgbat_func<T>, cec_detail::discus_func<T>,
+             cec_detail::grie_rosen_func<T>, cec_detail::rastrigin_func<T>}));
   }
 };
 template <int Dim, std::floating_point T>
@@ -191,10 +191,10 @@ public:
         x,
         std::to_array<std::pair<int, int>>(
             {{1, 10}, {1, 5}, {1, 5}, {1, 5}, {3, 10}}),
-        std::to_array({cec_detail::escaffer6_func<T>, cec_detail::hgbat_func<T>,
-                       cec_detail::rosenbrock_func<T>,
-                       cec_detail::schwefel_func<T>,
-                       cec_detail::ellips_func<T>}));
+        std::to_array<T (*)(std::span<T>)>(
+            {cec_detail::escaffer6_func<T>, cec_detail::hgbat_func<T>,
+             cec_detail::rosenbrock_func<T>, cec_detail::schwefel_func<T>,
+             cec_detail::ellips_func<T>}));
   }
 };
 template <int Dim, std::floating_point T>
@@ -206,7 +206,7 @@ public:
         x,
         std::to_array<std::pair<int, int>>(
             {{1, 10}, {1, 5}, {1, 5}, {1, 5}, {3, 10}}),
-        std::to_array(
+        std::to_array<T (*)(std::span<T>)>(
             {cec_detail::katsuura_func<T>, cec_detail::happycat_func<T>,
              cec_detail::grie_rosen_func<T>, cec_detail::schwefel_func<T>,
              cec_detail::ackley_func<T>}));
@@ -221,7 +221,7 @@ public:
     constexpr auto lams = std::to_array<T>({1, 1e-6, 1e-26, 1e-6, 1e-6});
     constexpr auto biases = std::to_array<T>({0, 100, 200, 300, 400});
     constexpr auto deltas = std::to_array<T>({10, 20, 30, 40, 50});
-    constexpr auto f = std::to_array(
+    constexpr auto f = std::to_array<T (*)(std::span<T, Dim>)>(
         {cec_detail::rosenbrock_func<T, Dim>, cec_detail::ellips_func<T, Dim>,
          cec_detail::bent_cigar_func<T, Dim>, cec_detail::discus_func<T, Dim>,
          cec_detail::ellips_func<T, Dim>});
@@ -250,9 +250,9 @@ public:
     constexpr auto deltas = std::to_array<T>({20, 20, 20});
     constexpr auto lams = std::to_array<T>({1, 1, 1});
     constexpr auto biases = std::to_array<T>({0, 100, 200});
-    constexpr auto f = std::to_array({cec_detail::schwefel_func<T, Dim>,
-                                      cec_detail::rastrigin_func<T, Dim>,
-                                      cec_detail::hgbat_func<T, Dim>});
+    constexpr auto f = std::to_array<T (*)(std::span<T, Dim>)>(
+        {cec_detail::schwefel_func<T, Dim>, cec_detail::rastrigin_func<T, Dim>,
+         cec_detail::hgbat_func<T, Dim>});
     std::array<T, cf_num()> fits;
     std::array<T, Dim> tmp_x;
     for (int i = 0; i < cf_num(); i++) {
@@ -278,9 +278,10 @@ public:
     return cec_detail::calculate_composition<Dim, false>(
         x, std::to_array<T>({10, 30, 50}), std::to_array<T>({0.25, 1, 1e-7}),
         std::to_array<T>({0, 100, 200}),
-        std::to_array({cec_detail::schwefel_func<T, Dim>,
-                       cec_detail::rastrigin_func<T, Dim>,
-                       cec_detail::ellips_func<T, Dim>}),
+        std::to_array<T (*)(std::span<T, Dim>)>(
+            {cec_detail::schwefel_func<T, Dim>,
+             cec_detail::rastrigin_func<T, Dim>,
+             cec_detail::ellips_func<T, Dim>}),
         y, z, s);
   }
   static constexpr auto cf_num() { return 3; }
@@ -296,11 +297,11 @@ public:
         x, std::to_array<T>({10, 10, 10, 10, 10}),
         std::to_array<T>({0.25, 1, 1e-7, 2.5, 10}),
         std::to_array<T>({0, 100, 200, 300, 400}),
-        std::to_array({cec_detail::schwefel_func<T, Dim>,
-                       cec_detail::happycat_func<T, Dim>,
-                       cec_detail::ellips_func<T, Dim>,
-                       cec_detail::weierstrass_func<T, Dim>,
-                       cec_detail::griewank_func<T, Dim>}),
+        std::to_array<T (*)(std::span<T, Dim>)>(
+            {cec_detail::schwefel_func<T, Dim>,
+             cec_detail::happycat_func<T, Dim>, cec_detail::ellips_func<T, Dim>,
+             cec_detail::weierstrass_func<T, Dim>,
+             cec_detail::griewank_func<T, Dim>}),
         y, z, s);
   }
   static constexpr auto cf_num() { return 5; }
@@ -316,11 +317,11 @@ public:
         x, std::to_array<T>({10, 10, 10, 20, 20}),
         std::to_array<T>({10, 10, 2.5, 25, 1e-6}),
         std::to_array<T>({0, 100, 200, 300, 400}),
-        std::to_array({cec_detail::hgbat_func<T, Dim>,
-                       cec_detail::rastrigin_func<T, Dim>,
-                       cec_detail::schwefel_func<T, Dim>,
-                       cec_detail::weierstrass_func<T, Dim>,
-                       cec_detail::ellips_func<T, Dim>}),
+        std::to_array<T (*)(std::span<T, Dim>)>(
+            {cec_detail::hgbat_func<T, Dim>, cec_detail::rastrigin_func<T, Dim>,
+             cec_detail::schwefel_func<T, Dim>,
+             cec_detail::weierstrass_func<T, Dim>,
+             cec_detail::ellips_func<T, Dim>}),
         y, z, s);
   }
   static constexpr auto cf_num() { return 5; }
@@ -336,11 +337,12 @@ public:
         x, std::to_array<T>({10, 20, 30, 40, 50}),
         std::to_array<T>({2.5, 10, 2.5, 5e-4, 1e-6}),
         std::to_array<T>({0, 100, 200, 300, 400}),
-        std::to_array({cec_detail::grie_rosen_func<T, Dim>,
-                       cec_detail::happycat_func<T, Dim>,
-                       cec_detail::schwefel_func<T, Dim>,
-                       cec_detail::escaffer6_func<T, Dim>,
-                       cec_detail::ellips_func<T, Dim>}),
+        std::to_array<T (*)(std::span<T, Dim>)>(
+            {cec_detail::grie_rosen_func<T, Dim>,
+             cec_detail::happycat_func<T, Dim>,
+             cec_detail::schwefel_func<T, Dim>,
+             cec_detail::escaffer6_func<T, Dim>,
+             cec_detail::ellips_func<T, Dim>}),
         y, z, s);
   }
   static constexpr auto cf_num() { return 5; }

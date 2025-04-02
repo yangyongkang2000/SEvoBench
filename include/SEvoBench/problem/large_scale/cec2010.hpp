@@ -448,4 +448,4 @@ struct cec2010_setting {
       cec2010_template<Using_SIMD, Using_SIMD ? std::min(simd_width<T>, W) : -1,
                        G, Index, Dim, T>;
 };
-}; // namespace sevobench::problem::simd
+} // namespace sevobench::problem::simd
