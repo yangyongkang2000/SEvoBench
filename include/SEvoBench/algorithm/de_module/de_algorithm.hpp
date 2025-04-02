@@ -90,7 +90,7 @@ public:
   }
   auto archive() noexcept {
     if constexpr (Use_Archive) {
-      return config_.archive;
+      return config_.archive.get();
     }
   }
   auto replace_archive([[maybe_unused]] std::conditional_t<
