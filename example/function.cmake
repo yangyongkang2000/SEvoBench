@@ -10,19 +10,51 @@ endif()
 
 if(CMAKE_CONFIGURATION_TYPES)
     target_compile_options(${arg1} PRIVATE
-        $<$<CONFIG:Release>:
+            $<$<CONFIG:Release>:
             $<$<CXX_COMPILER_ID:MSVC>:/fp:fast /arch:AVX2 /DINSTRSET=8 /F 8388608 /W4>
-            $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-ffast-math -mavx2 -mfma -Wall -Wextra -Wpedantic>
-        >
+
+            $<$<OR:$<CXX_COMPILER_ID:GNU>,$<AND:$<CXX_COMPILER_ID:Clang>,$<NOT:$<CXX_COMPILER_ID:AppleClang>>>>:
+            -ffast-math
+            -march=native
+            -Wall
+            -Wextra
+            -Wpedantic
+            >
+
+            $<$<CXX_COMPILER_ID:AppleClang>:
+            -ffast-math
+            -mavx2
+            -mfma
+            -Wall
+            -Wextra
+            -Wpedantic
+            >
+            >
     )
 else()
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
-target_compile_options(${arg1} PRIVATE
-$<IF:$<CXX_COMPILER_ID:MSVC>,
-    /fp:fast /arch:AVX2 /DINSTRSET=8 /F 8388608 /W4,
-    -ffast-math -mavx2 -mfma -Wall -Wextra -Wpedantic
->
-)
+    target_compile_options(${arg1} PRIVATE
+            $<$<CONFIG:Release>:
+            $<$<CXX_COMPILER_ID:MSVC>:/fp:fast /arch:AVX2 /DINSTRSET=8 /F 8388608 /W4>
+
+            $<$<OR:$<CXX_COMPILER_ID:GNU>,$<AND:$<CXX_COMPILER_ID:Clang>,$<NOT:$<CXX_COMPILER_ID:AppleClang>>>>:
+            -ffast-math
+            -march=native
+            -Wall
+            -Wextra
+            -Wpedantic
+            >
+
+            $<$<CXX_COMPILER_ID:AppleClang>:
+            -ffast-math
+            -mavx2
+            -mfma
+            -Wall
+            -Wextra
+            -Wpedantic
+            >
+            >
+    )
 endif()
 endif()
 

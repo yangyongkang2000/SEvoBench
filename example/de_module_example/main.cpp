@@ -1,5 +1,5 @@
 #include "SEvoBench/sevobench.hpp"
-#include<iostream>
+#include <iostream>
 int main() {
   using namespace sevobench;
   using namespace de_module;
@@ -15,8 +15,7 @@ int main() {
       std::make_unique<projection_repair<double>>(),
       std::make_unique<binomial_crossover<double>>(),
       std::make_unique<linear_reduction<double>>(alg, 50, 100),
-      std::make_unique<fifo_archive<double>>(2.0)
-  };
+      std::make_unique<fifo_archive<double>>(2.0)};
 
   // Initialize algorithm
   de_algorithm<true, double> de(std::move(config));

@@ -42,6 +42,6 @@ int main() {
                    pop.begin(), pop.end(),
                    [](auto &l, auto &r) { return l.fitness() < r.fitness(); })
                    ->fitness()
-            << std::endl;
+            << '\n';
   return 0;
 }

@@ -1,5 +1,5 @@
 #include "SEvoBench/sevobench.hpp"
-#include<iostream>
+#include <iostream>
 int main() {
   using namespace sevobench::problem;
 
@@ -13,9 +13,9 @@ int main() {
 
   // Evaluate solution
   std::vector<float> x(10, 0.5f);
-  for(auto& prob : suite) {
+  for (auto &prob : suite) {
     auto fitness = (*prob)(x);
-    std::cout << "F15 Instance " << prob->instance()
-              << " fitness: " << fitness << "\n";
+    std::cout << "F15 Instance " << prob->instance() << " fitness: " << fitness
+              << "\n";
   }
 }

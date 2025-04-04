@@ -12,10 +12,10 @@ include("../../function.cmake")
 find_package(ioh 0.3.18 QUIET)
 
 add_executable(sevobench_benchmark_parallel sevobench_benchmark.cpp)
-target_compile_definitions(sevobench_benchmark_parallel  DATA_DIR="${Data_Dir}" PARALLEL=1)
+target_compile_definitions(sevobench_benchmark_parallel PRIVATE DATA_DIR="${Data_Dir}" PARALLEL=1)
 
 add_executable(sevobench_benchmark sevobench_benchmark.cpp)
-target_compile_definitions(sevobench_benchmark  DATA_DIR="${Data_Dir}" PARALLEL=0)
+target_compile_definitions(sevobench_benchmark  PRIVATE DATA_DIR="${Data_Dir}" PARALLEL=0)
 
 common(sevobench_benchmark_parallel)
 common(sevobench_benchmark)
