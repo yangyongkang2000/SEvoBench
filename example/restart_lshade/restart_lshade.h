@@ -96,7 +96,7 @@ public:
         _.evaluate(f);
       alg.add_fes(pop.pop_size()); // Update evaluation count
 
-      // Track best solution at iteration start
+      // Track the best solution at iteration start
       T iteration_start_best =
           std::min_element(pop.begin(), pop.end(),
                            [](const auto &x, const auto &y) {
