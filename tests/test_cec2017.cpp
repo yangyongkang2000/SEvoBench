@@ -1,6 +1,6 @@
-#include <iostream>
-
 #include "SEvoBench/sevobench.hpp"
+#include <chrono>
+#include <iostream>
 
 void cec17_test_func(double *, double *, int, int, int);
 

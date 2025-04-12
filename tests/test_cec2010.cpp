@@ -1,6 +1,7 @@
 #include "SEvoBench/problem/large_scale/cec2010.hpp"
 #include "SEvoBench/sevobench.hpp"
 #include <cassert>
+#include <chrono>
 #include <iostream>
 int main() {
   constexpr int Pop_Size = 300;

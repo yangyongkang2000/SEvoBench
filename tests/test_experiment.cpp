@@ -1,4 +1,5 @@
 #include "SEvoBench/sevobench.hpp"
+#include <chrono>
 #include <iostream>
 int main() {
   constexpr int Dim = 30;
