@@ -61,7 +61,7 @@ inline auto evo_bench(auto &&alg, auto &&su, auto &&obs,
       if constexpr (b1) {
         if constexpr (parallel) {
           v.emplace_back(pt.submit([=] {
-            alg(temp_p,temp_p.lower_bound(), temp_p.upper_bound());
+            alg(temp_p, temp_p.lower_bound(), temp_p.upper_bound());
           }));
         } else {
           alg(temp_p, temp_p.lower_bound(), temp_p.upper_bound());

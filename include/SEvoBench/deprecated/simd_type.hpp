@@ -52,8 +52,8 @@ using simd_type =
 
 template <std::floating_point T>
   requires(!std::same_as<T, long double>) && (simd_id() >= 0)
-constexpr int simd_width = std::is_same_v<T, float> ? (1 << (simd_id() + 2))
-                                                    : (1 << (simd_id() + 1));
+constexpr int simd_width =
+    std::is_same_v<T, float> ? (1 << (simd_id() + 2)) : (1 << (simd_id() + 1));
 
 template <typename T, int Dim>
 concept simd_dim = (simd_id() < 0 && Dim >= 1) ||

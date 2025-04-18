@@ -21,9 +21,9 @@ template <int Dim, int Pop_Size = 100, int Max = 1000 * Dim,
   requires algorithm_func_concept<Dim, Pop_Size, Max, F, T> &&
            jade_parameter_concept<Parameter_Type, T> &&
            algorithm_positions_concept<F, G, T> && (Pop_Size >= 3)
-inline auto jade_optimize(
-    G &&positions, F &&function, T l, T r,
-    const Parameter_Type &pt = Parameter_Type()) noexcept {
+inline auto
+jade_optimize(G &&positions, F &&function, T l, T r,
+              const Parameter_Type &pt = Parameter_Type()) noexcept {
   const T c = pt.c;
   const int P = static_cast<int>(Pop_Size * pt.p);
   constexpr T k = T(1) / T(0x7fff);

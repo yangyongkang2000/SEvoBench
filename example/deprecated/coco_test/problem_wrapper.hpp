@@ -11,7 +11,7 @@ class problem_wrapper {
   coco_problem_t *problem;
 
 public:
-  problem_wrapper(coco_problem_t *_p) : problem(_p){};
+  problem_wrapper(coco_problem_t *_p) : problem(_p) {};
   double operator()(double *x) {
     double y;
     coco_evaluate_function(problem, x, &y);

@@ -67,20 +67,20 @@ template <std::uint64_t Alg_HashName, std::uint64_t Prob_HashName, int Dim,
           typename Alg =
               single_algorithm<Alg_HashName, Dim, Pop_Size, Max, Memory_Flag>,
           typename Prob = single_problem<Prob_HashName, Prob_Index, Dim, T>>
-concept single_algorithm_problem_task_concept =
-    requires(const Parameter_Type &par, Task &pool) {
-      requires single_algorithm_problem_concept<
-          Alg_HashName, Prob_HashName, Dim, Pop_Size, Max, Memory_Flag,
-          Prob_Index, Parameter_Type, T, Alg, Prob>;
-      {
-        pool.submit(benchamrk_calc<Prob, Alg, Memory_Flag, Parameter_Type>, par)
-      } -> std::same_as<std::future<std::conditional_t<
-            Memory_Flag,
-            std::pair<T, typename std::tuple_element_t<
-                             Memory_Flag ? 2 : 0,
-                             decltype(Alg()(Prob(), Prob::L, Prob::U))>>,
-            T>>>;
-    };
+concept single_algorithm_problem_task_concept = requires(
+    const Parameter_Type &par, Task &pool) {
+  requires single_algorithm_problem_concept<
+      Alg_HashName, Prob_HashName, Dim, Pop_Size, Max, Memory_Flag, Prob_Index,
+      Parameter_Type, T, Alg, Prob>;
+  {
+    pool.submit(benchamrk_calc<Prob, Alg, Memory_Flag, Parameter_Type>, par)
+  } -> std::same_as<std::future<std::conditional_t<
+      Memory_Flag,
+      std::pair<T, typename std::tuple_element_t<Memory_Flag ? 2 : 0,
+                                                 decltype(Alg()(Prob(), Prob::L,
+                                                                Prob::U))>>,
+      T>>>;
+};
 
 template <std::floating_point T, typename Problem> class tmp_benchmark_result {
   static constexpr auto P = Problem::size;
@@ -201,8 +201,8 @@ template <std::uint64_t Alg_HashName, std::uint64_t Prob_HashName,
                Alg_HashName, Prob_HashName, Dim, Pop_Size, Max, Memory_Flag, 1,
                Parameter_Type, typename V::value_type> &&
            (Runs >= 1)
-inline auto single_benchmark(
-    V &v, const Parameter_Type &par = Parameter_Type()) noexcept {
+inline auto
+single_benchmark(V &v, const Parameter_Type &par = Parameter_Type()) noexcept {
   using T = typename V::value_type;
   using F = single_problem<Prob_HashName, P, Dim, T>;
   std::array<T, Runs> result;
@@ -255,8 +255,9 @@ template <std::floating_point T, std::uint64_t Alg_HashName,
                Alg_HashName, Prob_HashName, Dim, Pop_Size, Max, Memory_Flag, P,
                Parameter_Type, T, Task> &&
            (Runs >= 1)
-inline auto parallel_benchmark(
-    V &v, Task &pool, const Parameter_Type &par = Parameter_Type()) noexcept {
+inline auto
+parallel_benchmark(V &v, Task &pool,
+                   const Parameter_Type &par = Parameter_Type()) noexcept {
   using F = single_problem<Prob_HashName, P, Dim, T>;
   using Algorithm =
       single_algorithm<Alg_HashName, Dim, Pop_Size, Max, Memory_Flag>;
@@ -282,9 +283,9 @@ template <std::uint64_t Alg_HashName, std::uint64_t Prob_HashName,
                  Alg_HashName, Prob_HashName, Dim, Pop_Size, Max, Memory_Flag,
                  1, Parameter_Type, typename V::value_type>)) &&
            (Runs >= 1)
-inline auto template_benchamrk(
-    V &result, Task &pool,
-    const Parameter_Type &par = Parameter_Type()) noexcept {
+inline auto
+template_benchamrk(V &result, Task &pool,
+                   const Parameter_Type &par = Parameter_Type()) noexcept {
   using T = typename V::value_type;
   using F = single_problem<Prob_HashName, 1, Dim, T>;
   using Algorithm =

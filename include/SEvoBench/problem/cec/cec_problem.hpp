@@ -242,19 +242,11 @@ public:
     return static_cast<Drived<Index, Dim, T> *>(this);
   }
 
-  static constexpr auto optimum_num() noexcept {
-    if constexpr (requires {
-                    { Drived<Index, Dim, T>::optimum_num() } -> std::same_as<T>;
-                  }) {
-      return Drived<Index, Dim, T>::optimum_num();
-    } else {
-      return T(100 * Index);
-    }
-  }
+  static constexpr auto optimum_num() noexcept { return T(100 * Index); }
 
   auto optimum_solution() const noexcept {
     solution<T> x(shift.data(), shift.data() + Dim);
-    x.set_fitness(optimum_num());
+    x.set_fitness(Drived<Index, Dim, T>::optimum_num());
     return x;
   }
   auto problem_information() const noexcept {
@@ -276,14 +268,16 @@ public:
         std::array<T, Dim> z;
         for (int i = 0; i < Dim; i++)
           z[i] = y[shuffle[i]];
-        return Drived<Index, Dim, T>::hybrid_evaluate(z) + optimum_num();
+        return Drived<Index, Dim, T>::hybrid_evaluate(z) +
+               Drived<Index, Dim, T>::optimum_num();
       } else {
-        return Drived<Index, Dim, T>::evaluate(y) + optimum_num();
+        return Drived<Index, Dim, T>::evaluate(y) +
+               Drived<Index, Dim, T>::optimum_num();
       }
     } else {
       return Drived<Index, Dim, T>::composition_evaluate(x, shift, matrix,
                                                          shuffle) +
-             optimum_num();
+             Drived<Index, Dim, T>::optimum_num();
     }
   }
 };

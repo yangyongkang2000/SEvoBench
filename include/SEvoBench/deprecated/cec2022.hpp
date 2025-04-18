@@ -2,10 +2,10 @@
 #include "cec_basical_func.hpp"
 
 namespace sevobench {
-template<typename T>
-constexpr T cec2022_optimum[]={300,400,600,800,900,1800,2000,2200,2300,2400,2600,2700};
+template <typename T>
+constexpr T cec2022_optimum[] = {300,  400,  600,  800,  900,  1800,
+                                 2000, 2200, 2300, 2400, 2600, 2700};
 }
-
 
 namespace sevobench::ieee_cec_set {
 namespace cec2022_data {

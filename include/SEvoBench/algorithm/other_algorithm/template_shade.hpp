@@ -1,10 +1,13 @@
 #pragma once
+
 #include "../../common/common_concept.hpp"
 #include "../../common/tool.hpp"
 
 namespace sevobench::other_algorithm::shade_detail {
 template <int N_Max, int N_Min>
-inline auto lshade_ite(const int fes_max) noexcept {
+inline auto lshade_ite(const int fes_max)
+
+    noexcept {
   int fes(N_Max);
   int n(N_Max);
   int i(0);
@@ -50,9 +53,10 @@ template <bool b, int Dim, int Pop_Size, int Max, bool Memory_Flag, typename G,
   requires algorithm_func_concept<Dim, Pop_Size, Max, F, T> &&
            template_shade_parameter_concept<Parameter_Type, T> &&
            algorithm_positions_concept<F, G, T> && (Pop_Size >= 3)
-inline auto template_shade_optimize(
-    G &&positions, F &&function, T l, T r,
-    const Parameter_Type &pt = Parameter_Type()) {
+
+inline auto
+template_shade_optimize(G &&positions, F &&function, T l, T r,
+                        const Parameter_Type &pt = Parameter_Type()) {
   const int LP = pt.H;
   constexpr int N_Min = 4;
   int M_Gen = Pop_Size;
@@ -207,8 +211,11 @@ template <int Dim, int Pop_Size = 100, int Max = 1000 * Dim,
   requires algorithm_func_concept<Dim, Pop_Size, Max, F, T> &&
            template_shade_parameter_concept<Parameter_Type, T> &&
            (Pop_Size >= 3)
+
 inline auto shade(F &&function, T l, T r,
-                  const Parameter_Type &pt = Parameter_Type()) noexcept {
+                  const Parameter_Type &pt = Parameter_Type())
+
+    noexcept {
   auto pop(tool::random_generate_position<T, Dim, Pop_Size>(l, r));
   return template_shade_optimize<true, Dim, Pop_Size, Max, Memory_Flag>(
       pop, function, l, r, pt);
@@ -220,8 +227,11 @@ template <int Dim, int Pop_Size = 18 * Dim, int Max = 1000 * Dim,
   requires algorithm_func_concept<Dim, Pop_Size, Max, F, T> &&
            template_shade_parameter_concept<Parameter_Type, T> &&
            (Pop_Size >= 3)
+
 inline auto lshade(F &&function, T l, T r,
-                   const Parameter_Type &pt = Parameter_Type()) noexcept {
+                   const Parameter_Type &pt = Parameter_Type())
+
+    noexcept {
   auto pop(tool::random_generate_position<T, Dim, Pop_Size>(l, r));
   return template_shade_optimize<false, Dim, Pop_Size, Max, Memory_Flag>(
       pop, function, l, r, pt);

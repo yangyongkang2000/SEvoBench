@@ -125,14 +125,6 @@ public:
   de_algorithm_builder(de_config<Use_Archive, T> &&_config)
       : config_(std::move(_config)) {}
 
-  template <std::floating_point T1>
-  [[nodiscard]] auto type()
-
-      noexcept {
-    return de_algorithm_builder<T1, Use_Archive, B1, B2, B3, B4, B5>(
-        std::move(config_));
-  }
-
   [[nodiscard]] auto mutation(std::unique_ptr<de_mutation<T>> &&m)
 
       noexcept {

@@ -1,26 +1,32 @@
 #pragma once
+
 #include "../../algorithm/evolutionary_algorithm.hpp"
 #include "../../common/population.hpp"
 #include "../../common/tool.hpp"
 #include "pso_topology.hpp"
 #include "pso_velocity.hpp"
+
 namespace sevobench::pso_module {
 template <std::floating_point T> class pso_update {
 public:
   virtual void update_velocity(const population<T> &, pso_velocity<T> &,
                                pso_topology<T> &, int) {};
+
   virtual void update_position(population<T> &pop, const pso_velocity<T> &vec,
                                pso_topology<T> &, int i) {
     int len = pop.dim();
     for (int j = 0; j < len; j++)
       pop[i][j] += vec[i][j];
   }
+
   virtual void update(const population<T> &, pso_topology<T> &) {}
+
   virtual ~pso_update() = default;
 };
 
 template <std::floating_point T, typename R = tool::rng>
   requires tool::random_generator_concept<R, T>
+
 class decrease_inertia_weight_update final : public pso_update<T> {
   const evolutionary_algorithm &alg;
   const T w_min = T(0.4);
@@ -31,10 +37,12 @@ class decrease_inertia_weight_update final : public pso_update<T> {
 public:
   R RNG1;
   R RNG2;
+
   decrease_inertia_weight_update(const evolutionary_algorithm &_alg,
                                  T _w_min = T(0.4), T _w_max = T(0.9),
                                  T _c1 = T(2), T _c2 = T(2))
       : alg(_alg), w_min(_w_min), w_max(_w_max), c1(_c1), c2(_c2) {}
+
   void update_velocity(const population<T> &pop, pso_velocity<T> &vec,
                        pso_topology<T> &top, int i) override {
     int dim = pop.dim();
@@ -53,16 +61,20 @@ public:
 
 template <std::floating_point T, typename R = tool::rng>
   requires tool::random_generator_concept<R, T>
+
 class inertia_weight_update final : public pso_update<T> {
-  const T w = T(0.4);
-  const T c1 = T(2);
-  const T c2 = T(2);
+  const T w = T(1) / T(2 * std::numbers::ln2_v<T>);
+  const T c1 = T(0.5) + std::numbers::ln2_v<T>;
+  const T c2 = T(0.5) + std::numbers::ln2_v<T>;
 
 public:
   R RNG1;
   R RNG2;
+
   inertia_weight_update() = default;
+
   inertia_weight_update(T _w, T _c1, T _c2) : w(_w), c1(_c1), c2(_c2) {}
+
   void update_velocity(const population<T> &pop, pso_velocity<T> &vec,
                        pso_topology<T> &top, int i) override {
     int dim = pop.dim();
@@ -76,11 +88,14 @@ public:
     }
   }
 };
+
 template <std::floating_point T, typename R = tool::rng>
   requires tool::random_generator_concept<R, T>
+
 class bare_bone_update final : public pso_update<T> {
 public:
   R RNG;
+
   void update_position(population<T> &pop, const pso_velocity<T> &,
                        pso_topology<T> &top, int i) override {
     int dim = pop.dim();
@@ -92,8 +107,10 @@ public:
     }
   }
 };
+
 template <std::floating_point T, typename R = tool::rng>
   requires tool::random_generator_concept<R, T>
+
 class fips_update : public pso_update<T> {
   const T phi = T(4.1);
   const T chi = T(0.729844);
@@ -101,9 +118,12 @@ class fips_update : public pso_update<T> {
 
 public:
   R RNG;
+
   fips_update() = default;
+
   fips_update(T _phi)
       : phi(_phi), chi(T(2) / (_phi - 2 + std::sqrt(_phi * (_phi - 4)))) {}
+
   void update_velocity(const population<T> &pop, pso_velocity<T> &vec,
                        pso_topology<T> &top, int i) override {
     int dim = pop.dim();
@@ -125,6 +145,7 @@ public:
 
 template <std::floating_point T, typename R = tool::rng>
   requires tool::random_generator_concept<R, T>
+
 class spherical_update : public pso_update<T> {
   const T w = T(1) / T(2 * std::numbers::ln2_v<T>);
   const T c1 = T(0.5) + std::numbers::ln2_v<T>;
@@ -137,8 +158,11 @@ public:
   R RNG2;
   R RNG3;
   R RNG4;
+
   spherical_update() = default;
+
   spherical_update(T _w, T _c1, T _c2) : w(_w), c1(_c1), c2(_c2) {}
+
   void update_velocity(const population<T> &pop, pso_velocity<T> &vec,
                        pso_topology<T> &top, int i) override {
     auto hypersphere_sample = [](T *first, T r, T *out, int Dim) {

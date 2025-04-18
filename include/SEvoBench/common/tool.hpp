@@ -244,6 +244,8 @@ public:
     return l + sr() * k * (r - l);
   }
 
+  auto operator()() const noexcept { return sr(); }
+
   int rand_int(int n) const noexcept { return sr() % n; }
   template <typename T> T normal(T m, T st) const noexcept {
     return box_muller(m, st, rand_float<T>(), rand_float<T>());

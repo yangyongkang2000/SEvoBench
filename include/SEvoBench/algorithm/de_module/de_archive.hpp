@@ -69,8 +69,10 @@ public:
     return std::span<const solution<T>>(this->archive_.data(), A_Size);
   }
 };
+
 template <std::floating_point T, typename R = tool::rng>
   requires tool::random_generator_concept<R, T>
+
 class random_archive final : public de_archive<T> {
   int replace_index = 0;
   int A_Size = 0;
@@ -79,6 +81,7 @@ class random_archive final : public de_archive<T> {
 
 public:
   sevobench::tool::rng RNG;
+
   random_archive() = default;
 
   random_archive(T ratio_archive) : r_Arc(ratio_archive) {}
@@ -91,10 +94,12 @@ public:
                           solution<T>(pop.dim()));
     this->archive_.set_dim(pop.dim());
   }
+
   void add(solution<T> &sol) override {
     std::swap(this->archive_[replace_index++], sol);
     A_Size++;
   }
+
   void resize(const population<T> &pop) override {
     Archive_Size = static_cast<int>(r_Arc * pop.pop_size());
     if (Archive_Size < A_Size) {
@@ -106,6 +111,7 @@ public:
       replace_index = Archive_Size;
     }
   }
+
   std::span<const solution<T>> get() override {
     return std::span<const solution<T>>(this->archive_.data(), A_Size);
   }

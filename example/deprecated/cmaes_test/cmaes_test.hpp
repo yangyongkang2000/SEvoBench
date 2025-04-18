@@ -52,7 +52,8 @@ template <typename T> struct cmaes_parameter {
 };
 template <int Dim, int Pop_Size, int Max, int Memory_Flag, typename F,
           typename T, typename Parameter_Type = cmaes_parameter<T>>
-inline auto cmaes(F &&f, T l, T r, const Parameter_Type &pt = Parameter_Type()) {
+inline auto cmaes(F &&f, T l, T r,
+                  const Parameter_Type &pt = Parameter_Type()) {
   sevobench::tool::curve_t<Memory_Flag, T, Max> cmaes_curve{};
   cmaes_wrapper<T, Dim, Pop_Size> cma_wrap(l, r, pt.sigma_rate);
   for (int _ = 0; (Memory_Flag ? _ : cma_wrap.get_eval()) < Max;
