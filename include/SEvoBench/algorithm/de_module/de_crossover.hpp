@@ -59,4 +59,25 @@ public:
   }
 };
 
+    template <std::floating_point T, typename R = tool::rng>
+    requires tool::random_generator_concept<R, T>
+
+    class cauchy_pertubation final : public de_crossover<T>
+    {
+        const T pr=T(0.2);
+        const T lb;
+        const T ub;
+    public:
+        R RNG;
+        R RNG1;
+        R RNG2;
+        cauchy_pertubation(T _lb,T _ub,T _pr=T(0.2)):lb(_lb),ub(_ub),pr(_pr) {}
+        void crossover(std::span<T> donor, std::span<const T> target, T cr) override {
+            auto dim = static_cast<int>(target.size());
+            auto j = RNG.rand_int(dim);
+            for (int i = 0; i < dim; i++)
+                donor[i] =
+                        (RNG.template rand_float<T>() < cr || i == j) ? donor[i] :(RNG1.template rand_float<T>()<pr?std::clamp(RNG2.cauchy(target[i],T(0.1)),lb,ub) :target[i]);
+        }
+    };
 } // namespace sevobench::de_module
