@@ -1,12 +1,13 @@
 #pragma once
-#pragma once
-#if __arm64
-#include "../../sse2neon/sse2neon.h"
+#if defined(__aarch64__) || defined(_M_ARM64)
+
+#include"../../sse2neon/sse2neon.h"
 
 // limit to 128byte, since we want to use ARM-neon
 #define MAX_VECTOR_SIZE 128
 
 // limit to sse4.2, sse2neon does not have any AVX instructions ( so far )
+
 #define INSTRSET 6
 
 // define unknown function
@@ -44,24 +45,32 @@ namespace sevobench::problem {
 
 template <std::floating_point T>
   requires(!std::same_as<T, long double>) && (simd_id() >= 0)
+#if defined(__aarch64__) || defined(_M_ARM64)
+    using simd_type=std::conditional_t<std::is_same_v<T, float>,Vec4f,Vec2d>;
+#else
 using simd_type =
     std::conditional_t<std::is_same_v<T, float>,
                        std::tuple_element_t<simd_id() < 0 ? 0 : simd_id(),
                                             std::tuple<Vec4f, Vec8f, Vec16f>>,
                        std::tuple_element_t<simd_id() < 0 ? 0 : simd_id(),
                                             std::tuple<Vec2d, Vec4d, Vec8d>>>;
+#endif
+
 
 template <std::floating_point T, int N>
   requires(!std::same_as<T, long double>) &&
               ((std::is_same_v<T, float> && (N == 4 || N == 8 || N == 16)) ||
                (std::is_same_v<T, double> && (N == 2 || N == 4 || N == 8)))
+#if defined(__aarch64__) || defined(_M_ARM64)
+using vsimd_type=std::conditional_t<std::is_same_v<T, float>,Vec4f,Vec2d>;
+#else
 using vsimd_type =
     std::conditional_t<std::is_same_v<T, float>,
                        std::tuple_element_t<N == 4 ? 0 : (N == 8 ? 1 : 2),
                                             std::tuple<Vec4f, Vec8f, Vec16f>>,
                        std::tuple_element_t<N == 2 ? 0 : (N == 4 ? 1 : 2),
                                             std::tuple<Vec2d, Vec4d, Vec8d>>>;
-
+#endif
 template <std::floating_point T>
   requires(!std::same_as<T, long double>) && (simd_id() >= 0)
 constexpr int simd_width =

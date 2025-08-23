@@ -1,7 +1,7 @@
 #pragma once
+#include "simd_type.hpp"
 #include "../../version2/vectormath_exp.h"
 #include "../../version2/vectormath_trig.h"
-#include "simd_type.hpp"
 #include <numbers>
 #include <numeric>
 

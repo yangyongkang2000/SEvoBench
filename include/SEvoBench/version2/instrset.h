@@ -215,6 +215,7 @@ constexpr int V_DC = -256;
 // input:  functionnumber = leaf (eax), ecxleaf = subleaf(ecx)
 // output: output[0] = eax, output[1] = ebx, output[2] = ecx, output[3] = edx
 static inline void cpuid(int output[4], int functionnumber, int ecxleaf = 0) {
+#if defined(__x86_64__) || defined(_M_AMD64) || defined(__i386__) || defined(_M_IX86)
 #if defined(__GNUC__) || defined(__clang__)           // use inline assembly, Gnu/AT&T syntax
     int a, b, c, d;
     __asm("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(functionnumber), "c"(ecxleaf) : );
@@ -237,6 +238,72 @@ static inline void cpuid(int output[4], int functionnumber, int ecxleaf = 0) {
         mov[esi + 8], ecx
         mov[esi + 12], edx
     }
+#endif
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    // ARM64 emulation of x86 CPUID behavior
+    switch(functionnumber) {
+        case 0: // Get vendor ID and maximum function number
+            output[0] = 0x0000000D; // Maximum basic function number
+            output[1] = 0x756E6547; // 'Genu'
+            output[2] = 0x6C65746E; // 'ineI'
+            output[3] = 0x49656E69; // 'ntel'
+            break;
+
+        case 1: // Get processor features and model information
+        {
+            // EAX: Processor version information
+            output[0] = 0x000406F0; // Emulate Intel Core i7
+
+            // EBX: Brand index and other information
+            output[1] = 0x00020800; // 8 logical processors, initial APIC ID=0
+
+            // ECX: Feature flags 1 - Set SSE4.2 support (bit 20)
+            output[2] = 0;
+            output[2] |= (1 << 0);  // SSE3
+            output[2] |= (1 << 9);  // SSSE3
+            output[2] |= (1 << 19); // SSE4.1
+            output[2] |= (1 << 20); // SSE4.2 - Key support
+            output[2] |= (1 << 28); // AVX
+
+            // EDX: Feature flags 2 - Set SSE2 support (bit 26)
+            output[3] = 0;
+            output[3] |= (1 << 23); // MMX
+            output[3] |= (1 << 25); // SSE
+            output[3] |= (1 << 26); // SSE2 - Key support
+            output[3] |= (1 << 28); // HTT (Hyper-Threading)
+            break;
+        }
+
+        case 2: // Cache and TLB information
+            output[0] = 0x76036301;
+            output[1] = 0x00F0B5FF;
+            output[2] = 0x00000000;
+            output[3] = 0x00C30000;
+            break;
+
+        case 4: // Cache configuration
+            // Return valid cache information
+            output[0] = 0x1C004121;
+            output[1] = 0x01C0003F;
+            output[2] = 0x0000003F;
+            output[3] = 0x00000001;
+            break;
+
+        case 7: // Extended features
+            if (ecxleaf == 0) {
+                output[0] = 0x00000000; // Maximum sub-leaf number
+                output[1] = 0x00000000; // Extended features
+                output[2] = 0x00000000;
+                output[3] = 0x00000000;
+            }
+            break;
+        default:
+            // Unknown function number returns 0
+            output[0] = output[1] = output[2] = output[3] = 0;
+    }
+
+#else
+    #error "Unsupported architecture for cpuid emulation"
 #endif
 }
 
